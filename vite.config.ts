@@ -15,6 +15,12 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
+      // 새 배포 후 예전 번들이 남아 탭 버튼 등 구 UI가 보이는 것 완화
+      workbox: {
+        clientsClaim: true,
+        skipWaiting: true,
+        cleanupOutdatedCaches: true,
+      },
       manifest: {
         name: 'AlphaLog',
         short_name: 'AlphaLog',
