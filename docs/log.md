@@ -10,3 +10,11 @@
 - 경제지표·설정·대시보드·매매일지 등 여백 조정, Select/날짜 입력 패딩.
 
 상세: `docs/handoff-2026-05-18.md`
+
+## [2026-05-18] session | 배포 트러블슈팅, Auth UX, 문서 핸드오프
+
+- Vercel 환경 변수·Redeploy·Supabase URL(루트 vs `/rest/v1/`) 가이드 및 배포 초보 문서 업데이트.
+- 로그인 화면: 탭 제거, 비번 찾기는 로그인 실패 후 노출·재설정 메일 플로.
+- `failed to fetch` 한글 진단、`vite.config` PWA workbox、`scripts/capture-vercel-ui.mjs`, `artifacts/` ignore.
+- 새 핸드오프: `docs/handoff.md` (세션 시작 시 아카이브 예정).
+
