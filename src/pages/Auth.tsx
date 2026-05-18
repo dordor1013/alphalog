@@ -3,6 +3,16 @@ import { supabase, supabaseConfigured } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 
+/** "Failed to fetch" 등 브라우저 네트워크 오류 → 배포 설정 안내로 바꿈 */
+function formatSupabaseAuthError(raw?: string): string {
+  const m = (raw ?? '').trim()
+  if (!m) return '알 수 없는 오류가 났습니다. 잠시 후 다시 시도해 주세요.'
+  if (/failed to fetch|networkerror|network request failed|load failed|네트워크/i.test(m)) {
+    return '서버와 연결할 수 없습니다. 배포 설정(Vercel 등)에서 VITE_SUPABASE_URL·VITE_SUPABASE_ANON_KEY가 들어있는지 확인하고, Production과 Preview 모두 체크한 뒤 Redeploy 한 다음 다시 시도해 주세요.'
+  }
+  return m
+}
+
 export function detectPasswordRecoveryHash(): boolean {
   if (typeof window === 'undefined') return false
   const raw = window.location.hash
@@ -41,17 +51,20 @@ export function AuthPage() {
       if (!trimmed) { setError('이메일을 입력해주세요.'); setLoading(false); return }
       const redirectTo = `${window.location.origin}${window.location.pathname}`
       const { error: err } = await supabase.auth.resetPasswordForEmail(trimmed, { redirectTo })
-      if (err) setError(err.message)
+      if (err) setError(formatSupabaseAuthError(err.message))
       else setMessage('재설정 메일을 보냈습니다. 메일함(스팸함 포함)을 확인해 주세요.')
     } else if (isLogin) {
       const { error: err } = await supabase.auth.signInWithPassword({ email, password })
       if (err) {
-        setError(err.message)
-        setShowForgotHint(true)
+        setError(formatSupabaseAuthError(err.message))
+        // 비번 틀림 등일 때만 비번 찾기 안내 — 네트워크 장애일 땐 혼동 방지
+        if (!/failed to fetch|networkerror|network request failed|load failed/i.test(err.message ?? '')) {
+          setShowForgotHint(true)
+        }
       }
     } else {
       const { error: err } = await supabase.auth.signUp({ email, password })
-      if (err) setError(err.message)
+      if (err) setError(formatSupabaseAuthError(err.message))
       else setMessage('확인 이메일을 전송했습니다. 이메일을 확인해주세요.')
     }
 
