@@ -3,7 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useStore } from '@/store/useStore'
 import { BottomNav, Sidebar } from '@/components/BottomNav'
-import { AuthPage } from '@/pages/Auth'
+import { AuthPage, detectPasswordRecoveryHash } from '@/pages/Auth'
+import { PasswordRecoveryForm } from '@/pages/PasswordRecovery'
 import { DashboardPage } from '@/pages/Dashboard'
 import { TradeLogPage } from '@/pages/TradeLog'
 import { NewTradePage } from '@/pages/NewTrade'
@@ -13,14 +14,27 @@ import { SettingsPage } from '@/pages/Settings'
 export default function App() {
   const { user, setUser, fetchTrades, fetchStrategies, initStrategies } = useStore()
   const [ready, setReady] = useState(false)
+  const [passwordRecoveryMode, setPasswordRecoveryMode] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.location.hash.includes('type=recovery')
+  })
 
   useEffect(() => {
+    // 메일 재설정 링크 진입 시, getSession 처리 전에 한 번이라도 해시 확인
+    if (detectPasswordRecoveryHash()) setPasswordRecoveryMode(true)
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (detectPasswordRecoveryHash()) setPasswordRecoveryMode(true)
       setUser(session?.user ?? null)
       setReady(true)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // 비밀번호 재설정 링크 로그인 후 이 이벤트가 와야 하는데, 버전별로 빠지면 해시 검사를 보조로 둠
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecoveryMode(true)
+      if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && detectPasswordRecoveryHash()) {
+        setPasswordRecoveryMode(true)
+      }
       setUser(session?.user ?? null)
     })
 
@@ -28,11 +42,11 @@ export default function App() {
   }, [setUser])
 
   useEffect(() => {
-    if (user) {
+    if (user && !passwordRecoveryMode) {
       fetchTrades()
       fetchStrategies().then(() => initStrategies())
     }
-  }, [user, fetchTrades, fetchStrategies, initStrategies])
+  }, [user, passwordRecoveryMode, fetchTrades, fetchStrategies, initStrategies])
 
   if (!ready) {
     return (
@@ -43,6 +57,19 @@ export default function App() {
   }
 
   if (!user) return <AuthPage />
+
+  if (passwordRecoveryMode && user) {
+    return (
+      <PasswordRecoveryForm
+        onComplete={() => {
+          setPasswordRecoveryMode(false)
+          if (window.location.hash) {
+            window.history.replaceState({}, document.title, window.location.pathname + window.location.search)
+          }
+        }}
+      />
+    )
+  }
 
   return (
     <BrowserRouter>
