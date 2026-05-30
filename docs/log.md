@@ -1,5 +1,17 @@
 # Session log
 
+## [2026-05-30] session | 옵션·Auth·수익률·공모주 노트·Vercel 배포
+
+- 설정 매수/매도 옵션: DB `strategies` 생성(004), 타입별 초기화·추가 오류 처리, NewTrade→설정 바로가기
+- 로그인 Invalid API key: 세션 정리·probe, 비밀번호 찾기/변경 UX, `admin-reset-password`
+- 대시보드 일·주·월·년 누적 수익률 (`src/lib/returns.ts`)
+- 설정 계정 비밀번호 변경
+- 공모주 노트 `/ipo`: 배정가·수익률, 청약일·상장일·당첨/미당첨/대기(005)
+- 경제지표 Investing.com 조사 → 보류; FRED 키만 넣으면 동작
+- Commits: `6320205`, `4de3760`, `7b84108`, `b19138a`, `698baa7`
+
+상세: `docs/handoff.md`
+
 ## [2026-05-30] session | Vercel·Supabase 가입/로그인, email rate limit
 
 - API 키·Paused 프로젝트·Vercel env 불일치 진단; `finish-setup`으로 .env·Auth URL 정렬
@@ -7,7 +19,7 @@
 - Auth 한국어 오류, signUp `emailRedirectTo`, 연결 probe, 배포/진단 스크립트
 - Commits: `2407ef1`, `e4119ac`
 
-상세: `docs/handoff.md`
+상세: `docs/handoff-2026-05-30.md`
 
 ## [2026-05-18] session | AlphaLog 브랜딩, 폼·여백·CSS 레이어, trade_options 마이그레이션
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-05-30 (후속)
+
+- 매매 기준 옵션: `strategies` 테이블 마이그레이션(004)·설정 옵션 추가/초기화 수정, NewTrade 설정 바로가기
+- Auth: Invalid API key 세션 정리·키 검증, 비밀번호 변경(설정), `admin-reset-password` 스크립트
+- 대시보드: 일·주·월·년 누적 수익률(실현손익 기준)
+- 공모주 노트 탭(`/ipo`): 일육공 스타일 투자노트, 청약일·상장일·당첨/미당첨/대기, 당첨 시만 배정·매도·수익률 자동 계산 (005)
+- 배포: 기능 추가 시 `main` push → Vercel 자동 배포 (사용자 요청)
+- 경제지표: Investing.com 직접 연동은 보류, FRED(`VITE_FRED_API_KEY`) 기존 구조 유지
+
 ## 2026-05-30
 
 - Vercel·Supabase 연결 복구(URL·Publishable 키, Redeploy), 로컬 `.env` 동기화(`setup:finish`)
