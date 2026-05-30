@@ -11,9 +11,10 @@ import { TradeLogPage } from '@/pages/TradeLog'
 import { NewTradePage } from '@/pages/NewTrade'
 import { EconomicPage } from '@/pages/Economic'
 import { SettingsPage } from '@/pages/Settings'
+import { IpoNotesPage } from '@/pages/IpoNotes'
 
 export default function App() {
-  const { user, setUser, fetchTrades, fetchStrategies, initStrategies } = useStore()
+  const { user, setUser, fetchTrades, fetchStrategies, initStrategies, fetchIpoRecords } = useStore()
   const [ready, setReady] = useState(false)
   const [passwordRecoveryMode, setPasswordRecoveryMode] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -49,8 +50,9 @@ export default function App() {
     if (user && !passwordRecoveryMode) {
       fetchTrades()
       fetchStrategies().then(() => initStrategies())
+      fetchIpoRecords()
     }
-  }, [user, passwordRecoveryMode, fetchTrades, fetchStrategies, initStrategies])
+  }, [user, passwordRecoveryMode, fetchTrades, fetchStrategies, initStrategies, fetchIpoRecords])
 
   if (!ready) {
     return (
@@ -87,6 +89,7 @@ export default function App() {
                 <Route path="/trades/kr" element={<TradeLogPage />} />
                 <Route path="/trades/us" element={<TradeLogPage />} />
                 <Route path="/new" element={<NewTradePage />} />
+                <Route path="/ipo" element={<IpoNotesPage />} />
                 <Route path="/economic" element={<EconomicPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

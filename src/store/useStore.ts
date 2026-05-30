@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
-import type { Trade, Strategy, TradeFormData, Market, TradeType } from '@/lib/types'
+import type { Trade, Strategy, TradeFormData, Market, TradeType, IpoRecord, IpoFormData } from '@/lib/types'
 import type { User } from '@supabase/supabase-js'
 
 interface AppState {
   user: User | null
   trades: Trade[]
   strategies: Strategy[]
+  ipoRecords: IpoRecord[]
   loading: boolean
 
   setUser: (user: User | null) => void
@@ -18,6 +19,10 @@ interface AppState {
   addStrategy: (type: TradeType) => Promise<boolean>
   deleteStrategy: (id: string) => Promise<void>
   initStrategies: () => Promise<void>
+  fetchIpoRecords: () => Promise<void>
+  addIpoRecord: (data: IpoFormData) => Promise<boolean>
+  updateIpoRecord: (id: string, data: IpoFormData) => Promise<boolean>
+  deleteIpoRecord: (id: string) => Promise<void>
   getTradesByMarket: (market: Market) => Trade[]
   getHoldings: (market?: Market) => { stock_name: string; market: Market; quantity: number; avg_price: number; value: number }[]
 }
@@ -26,6 +31,7 @@ export const useStore = create<AppState>((set, get) => ({
   user: null,
   trades: [],
   strategies: [],
+  ipoRecords: [],
   loading: false,
 
   setUser: (user) => set({ user }),
@@ -160,6 +166,68 @@ export const useStore = create<AppState>((set, get) => ({
   deleteStrategy: async (id) => {
     await supabase.from('strategies').delete().eq('id', id)
     await get().fetchStrategies()
+  },
+
+  fetchIpoRecords: async () => {
+    const { user } = get()
+    if (!user) return
+
+    const { data } = await supabase
+      .from('ipo_records')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('sell_date', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+
+    set({ ipoRecords: data ?? [] })
+  },
+
+  addIpoRecord: async (formData) => {
+    const { user } = get()
+    if (!user) return false
+
+    const { error } = await supabase.from('ipo_records').insert({
+      user_id: user.id,
+      stock_name: formData.stock_name.trim(),
+      underwriter: formData.underwriter.trim(),
+      quantity: formData.quantity,
+      allocation_price: formData.allocation_price,
+      sell_date: formData.sell_date || null,
+      sell_price: formData.sell_price,
+    })
+
+    if (error) {
+      console.error('[addIpoRecord]', error.message)
+      return false
+    }
+    await get().fetchIpoRecords()
+    return true
+  },
+
+  updateIpoRecord: async (id, formData) => {
+    const { error } = await supabase
+      .from('ipo_records')
+      .update({
+        stock_name: formData.stock_name.trim(),
+        underwriter: formData.underwriter.trim(),
+        quantity: formData.quantity,
+        allocation_price: formData.allocation_price,
+        sell_date: formData.sell_date || null,
+        sell_price: formData.sell_price,
+      })
+      .eq('id', id)
+
+    if (error) {
+      console.error('[updateIpoRecord]', error.message)
+      return false
+    }
+    await get().fetchIpoRecords()
+    return true
+  },
+
+  deleteIpoRecord: async (id) => {
+    await supabase.from('ipo_records').delete().eq('id', id)
+    await get().fetchIpoRecords()
   },
 
   getTradesByMarket: (market) => {

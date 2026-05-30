@@ -1,12 +1,13 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, PlusCircle, Globe, Settings } from 'lucide-react'
+import { LayoutDashboard, BookOpen, PlusCircle, Rocket, Globe, Settings } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: '대시보드' },
   { to: '/trades/kr', icon: BookOpen, label: '매매일지' },
   { to: '/new', icon: PlusCircle, label: '기록' },
-  { to: '/economic', icon: Globe, label: '경제지표' },
+  { to: '/ipo', icon: Rocket, label: '공모주' },
+  { to: '/economic', icon: Globe, label: '경제' },
   { to: '/settings', icon: Settings, label: '설정' },
 ]
 

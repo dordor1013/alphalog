@@ -52,6 +52,27 @@ export interface PortfolioItem {
   percentage: number
 }
 
+export interface IpoRecord {
+  id: string
+  user_id: string
+  stock_name: string
+  underwriter: string
+  quantity: number
+  allocation_price: number
+  sell_date: string | null
+  sell_price: number | null
+  created_at: string
+}
+
+export interface IpoFormData {
+  stock_name: string
+  underwriter: string
+  quantity: number
+  allocation_price: number
+  sell_date: string
+  sell_price: number
+}
+
 export interface EconomicIndicator {
   id: string
   name: string
