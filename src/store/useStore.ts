@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
+import { ipoFormToRow } from '@/lib/ipo'
 import type { Trade, Strategy, TradeFormData, Market, TradeType, IpoRecord, IpoFormData } from '@/lib/types'
 import type { User } from '@supabase/supabase-js'
 
@@ -176,7 +177,7 @@ export const useStore = create<AppState>((set, get) => ({
       .from('ipo_records')
       .select('*')
       .eq('user_id', user.id)
-      .order('sell_date', { ascending: false, nullsFirst: false })
+      .order('subscription_date', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
 
     set({ ipoRecords: data ?? [] })
@@ -188,12 +189,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     const { error } = await supabase.from('ipo_records').insert({
       user_id: user.id,
-      stock_name: formData.stock_name.trim(),
-      underwriter: formData.underwriter.trim(),
-      quantity: formData.quantity,
-      allocation_price: formData.allocation_price,
-      sell_date: formData.sell_date || null,
-      sell_price: formData.sell_price,
+      ...ipoFormToRow(formData),
     })
 
     if (error) {
@@ -207,14 +203,7 @@ export const useStore = create<AppState>((set, get) => ({
   updateIpoRecord: async (id, formData) => {
     const { error } = await supabase
       .from('ipo_records')
-      .update({
-        stock_name: formData.stock_name.trim(),
-        underwriter: formData.underwriter.trim(),
-        quantity: formData.quantity,
-        allocation_price: formData.allocation_price,
-        sell_date: formData.sell_date || null,
-        sell_price: formData.sell_price,
-      })
+      .update(ipoFormToRow(formData))
       .eq('id', id)
 
     if (error) {

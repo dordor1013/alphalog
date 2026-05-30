@@ -52,13 +52,18 @@ export interface PortfolioItem {
   percentage: number
 }
 
+export type IpoAllotmentStatus = 'PENDING' | 'WON' | 'LOST'
+
 export interface IpoRecord {
   id: string
   user_id: string
   stock_name: string
   underwriter: string
+  subscription_date: string | null
+  listing_date: string | null
+  allotment_status: IpoAllotmentStatus
   quantity: number
-  allocation_price: number
+  allocation_price: number | null
   sell_date: string | null
   sell_price: number | null
   created_at: string
@@ -67,6 +72,9 @@ export interface IpoRecord {
 export interface IpoFormData {
   stock_name: string
   underwriter: string
+  subscription_date: string
+  listing_date: string
+  allotment_status: IpoAllotmentStatus
   quantity: number
   allocation_price: number
   sell_date: string

@@ -1,34 +1,56 @@
 import { useMemo, useState } from 'react'
-import { format } from 'date-fns'
 import { Plus, Trash2, Pencil, Rocket } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { Tabs } from '@/components/ui/Tabs'
 import { Modal } from '@/components/ui/Modal'
 import { PAGE_SHELL } from '@/lib/pageLayout'
-import { calcIpoProfit, calcIpoReturn, formatIpoReturnPct, formatKrw } from '@/lib/ipo'
-import type { IpoFormData, IpoRecord } from '@/lib/types'
+import {
+  calcIpoProfit,
+  calcIpoReturn,
+  formatIpoReturnPct,
+  formatKrw,
+  IPO_STATUS_LABELS,
+  ipoRecordToForm,
+  isIpoWon,
+  validateIpoForm,
+} from '@/lib/ipo'
+import type { IpoAllotmentStatus, IpoFormData, IpoRecord } from '@/lib/types'
 import { cn } from '@/lib/cn'
 
 const emptyForm = (): IpoFormData => ({
   stock_name: '',
   underwriter: '',
+  subscription_date: '',
+  listing_date: '',
+  allotment_status: 'PENDING',
   quantity: 0,
   allocation_price: 0,
-  sell_date: format(new Date(), 'yyyy-MM-dd'),
+  sell_date: '',
   sell_price: 0,
 })
 
-function formFromRecord(r: IpoRecord): IpoFormData {
-  return {
-    stock_name: r.stock_name,
-    underwriter: r.underwriter,
-    quantity: r.quantity,
-    allocation_price: Number(r.allocation_price),
-    sell_date: r.sell_date ?? format(new Date(), 'yyyy-MM-dd'),
-    sell_price: Number(r.sell_price ?? 0),
-  }
+const STATUS_TABS: { value: IpoAllotmentStatus; label: string }[] = [
+  { value: 'PENDING', label: '결과 대기' },
+  { value: 'WON', label: '당첨' },
+  { value: 'LOST', label: '미당첨' },
+]
+
+function StatusBadge({ status }: { status: IpoAllotmentStatus }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex rounded-md px-2 py-0.5 text-xs font-medium',
+        status === 'WON' && 'bg-success/15 text-success',
+        status === 'LOST' && 'bg-text-dim/20 text-text-sub',
+        status === 'PENDING' && 'bg-warning/15 text-warning',
+      )}
+    >
+      {IPO_STATUS_LABELS[status]}
+    </span>
+  )
 }
 
 export function IpoNotesPage() {
@@ -40,44 +62,59 @@ export function IpoNotesPage() {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
+  const wonForm = isIpoWon(form.allotment_status)
+
   const previewReturn = useMemo(() => {
-    if (form.allocation_price <= 0 || form.sell_price <= 0) return null
+    if (!wonForm || form.allocation_price <= 0 || form.sell_price <= 0) return null
     return calcIpoReturn(form.allocation_price, form.sell_price)
-  }, [form.allocation_price, form.sell_price])
+  }, [wonForm, form.allocation_price, form.sell_price])
 
   const previewProfit = useMemo(() => {
-    if (form.allocation_price <= 0 || form.sell_price <= 0 || form.quantity <= 0) return null
+    if (!wonForm || form.allocation_price <= 0 || form.sell_price <= 0 || form.quantity <= 0) return null
     return calcIpoProfit(form.allocation_price, form.sell_price, form.quantity)
-  }, [form.allocation_price, form.sell_price, form.quantity])
+  }, [wonForm, form.allocation_price, form.sell_price, form.quantity])
 
   const summary = useMemo(() => {
     let totalProfit = 0
     let returnSum = 0
     let returnCount = 0
+    let won = 0
+    let lost = 0
+    let pending = 0
+
     for (const r of ipoRecords) {
+      if (r.allotment_status === 'WON') won += 1
+      else if (r.allotment_status === 'LOST') lost += 1
+      else pending += 1
+
+      if (r.allotment_status !== 'WON') continue
       const sell = Number(r.sell_price ?? 0)
-      const alloc = Number(r.allocation_price)
+      const alloc = Number(r.allocation_price ?? 0)
       if (sell > 0 && alloc > 0) {
         totalProfit += calcIpoProfit(alloc, sell, r.quantity)
         returnSum += calcIpoReturn(alloc, sell) ?? 0
         returnCount += 1
       }
     }
+
     return {
       count: ipoRecords.length,
+      won,
+      lost,
+      pending,
       totalProfit,
       avgReturn: returnCount > 0 ? Math.round((returnSum / returnCount) * 100) / 100 : null,
     }
   }, [ipoRecords])
 
-  const validate = (data: IpoFormData): string | null => {
-    if (!data.stock_name.trim()) return '종목명을 입력해 주세요.'
-    if (!data.underwriter.trim()) return '주관사를 입력해 주세요.'
-    if (data.quantity <= 0) return '수량(주)을 입력해 주세요.'
-    if (data.allocation_price <= 0) return '배정가를 입력해 주세요.'
-    if (!data.sell_date) return '매도일을 입력해 주세요.'
-    if (data.sell_price <= 0) return '매도가를 입력해 주세요.'
-    return null
+  const setStatus = (status: IpoAllotmentStatus) => {
+    setForm((f) => ({
+      ...f,
+      allotment_status: status,
+      ...(status !== 'WON'
+        ? { quantity: 0, allocation_price: 0, sell_date: '', sell_price: 0 }
+        : {}),
+    }))
   }
 
   const resetForm = () => {
@@ -95,22 +132,20 @@ export function IpoNotesPage() {
   }
 
   const openEdit = (r: IpoRecord) => {
-    setForm(formFromRecord(r))
+    setForm(ipoRecordToForm(r))
     setEditTarget(r)
     setShowForm(true)
     setError('')
   }
 
   const handleSubmit = async () => {
-    const msg = validate(form)
+    const msg = validateIpoForm(form)
     if (msg) {
       setError(msg)
       return
     }
     setSaving(true)
-    const ok = editTarget
-      ? await updateIpoRecord(editTarget.id, form)
-      : await addIpoRecord(form)
+    const ok = editTarget ? await updateIpoRecord(editTarget.id, form) : await addIpoRecord(form)
     setSaving(false)
     if (!ok) {
       setError('저장하지 못했습니다. DB 마이그레이션이 필요하면 npm run db:migrate 를 실행해 주세요.')
@@ -126,10 +161,13 @@ export function IpoNotesPage() {
   }
 
   const renderRecordReturn = (r: IpoRecord) => {
+    if (r.allotment_status === 'LOST') return { label: '미당첨', pct: null, profit: null }
+    if (r.allotment_status === 'PENDING') return { label: '결과 대기', pct: null, profit: null }
     const sell = Number(r.sell_price ?? 0)
-    const alloc = Number(r.allocation_price)
-    if (sell <= 0 || alloc <= 0) return { pct: null as number | null, profit: null as number | null }
+    const alloc = Number(r.allocation_price ?? 0)
+    if (sell <= 0 || alloc <= 0) return { label: '매도 전', pct: null, profit: null }
     return {
+      label: null,
       pct: calcIpoReturn(alloc, sell),
       profit: calcIpoProfit(alloc, sell, r.quantity),
     }
@@ -144,7 +182,7 @@ export function IpoNotesPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">공모주 노트</h1>
-            <p className="text-sm text-text-sub">배정가 대비 매도 수익을 기록합니다</p>
+            <p className="text-sm text-text-sub">청약 일정·당첨 결과·매도 수익을 기록합니다</p>
           </div>
         </div>
         {!showForm && (
@@ -156,13 +194,21 @@ export function IpoNotesPage() {
       </div>
 
       {ipoRecords.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <Card className="p-4 text-center">
-            <p className="text-xs text-text-sub">기록</p>
-            <p className="mt-1 text-lg font-bold">{summary.count}건</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Card className="p-3 text-center">
+            <p className="text-xs text-text-sub">전체</p>
+            <p className="mt-1 text-lg font-bold">{summary.count}</p>
           </Card>
-          <Card className="p-4 text-center">
-            <p className="text-xs text-text-sub">평균 수익률</p>
+          <Card className="p-3 text-center">
+            <p className="text-xs text-text-sub">당첨</p>
+            <p className="mt-1 text-lg font-bold text-success">{summary.won}</p>
+          </Card>
+          <Card className="p-3 text-center">
+            <p className="text-xs text-text-sub">미당첨</p>
+            <p className="mt-1 text-lg font-bold text-text-sub">{summary.lost}</p>
+          </Card>
+          <Card className="p-3 text-center">
+            <p className="text-xs text-text-sub">당첨 평균 수익</p>
             <p
               className={cn(
                 'mt-1 text-lg font-bold',
@@ -173,18 +219,6 @@ export function IpoNotesPage() {
               {formatIpoReturnPct(summary.avgReturn)}
             </p>
           </Card>
-          <Card className="p-4 text-center">
-            <p className="text-xs text-text-sub">총 실현손익</p>
-            <p
-              className={cn(
-                'mt-1 text-lg font-bold',
-                summary.totalProfit > 0 && 'text-success',
-                summary.totalProfit < 0 && 'text-danger',
-              )}
-            >
-              {formatKrw(summary.totalProfit)}
-            </p>
-          </Card>
         </div>
       )}
 
@@ -193,6 +227,7 @@ export function IpoNotesPage() {
           <h2 className="text-sm font-semibold text-text-sub">
             {editTarget ? '기록 수정' : '새 공모주 기록'}
           </h2>
+
           <Input
             label="종목명"
             placeholder="예: OO테크"
@@ -205,63 +240,102 @@ export function IpoNotesPage() {
             value={form.underwriter}
             onChange={(e) => setForm((f) => ({ ...f, underwriter: e.target.value }))}
           />
+
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="수량 (주)"
-              type="number"
-              min="1"
-              step="1"
-              value={form.quantity || ''}
-              onChange={(e) => setForm((f) => ({ ...f, quantity: parseInt(e.target.value, 10) || 0 }))}
-            />
-            <Input
-              label="배정가 (원)"
-              type="number"
-              min="0"
-              step="1"
-              placeholder="수익률 계산용"
-              value={form.allocation_price || ''}
-              onChange={(e) => setForm((f) => ({ ...f, allocation_price: parseFloat(e.target.value) || 0 }))}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="매도일"
+              label="청약일"
               type="date"
-              value={form.sell_date}
-              onChange={(e) => setForm((f) => ({ ...f, sell_date: e.target.value }))}
+              value={form.subscription_date}
+              onChange={(e) => setForm((f) => ({ ...f, subscription_date: e.target.value }))}
+              required
             />
             <Input
-              label="매도가 (원)"
-              type="number"
-              min="0"
-              step="1"
-              value={form.sell_price || ''}
-              onChange={(e) => setForm((f) => ({ ...f, sell_price: parseFloat(e.target.value) || 0 }))}
+              label="상장일 (선택)"
+              type="date"
+              value={form.listing_date}
+              onChange={(e) => setForm((f) => ({ ...f, listing_date: e.target.value }))}
             />
           </div>
 
-          <div className="rounded-xl border border-border bg-bg px-4 py-3">
-            <p className="text-xs text-text-sub">수익률 (자동 계산)</p>
-            <p className="mt-1 text-xs text-text-dim">(매도가 − 배정가) ÷ 배정가 × 100</p>
-            <div className="mt-2 flex flex-wrap items-baseline gap-3">
-              <span
-                className={cn(
-                  'text-2xl font-bold',
-                  previewReturn !== null && previewReturn > 0 && 'text-success',
-                  previewReturn !== null && previewReturn < 0 && 'text-danger',
-                  previewReturn === null && 'text-text-dim',
-                )}
-              >
-                {formatIpoReturnPct(previewReturn)}
-              </span>
-              {previewProfit !== null && (
-                <span className="text-sm text-text-sub">
-                  손익 {formatKrw(previewProfit)}
-                </span>
-              )}
-            </div>
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-text-sub">청약 결과</span>
+            <Tabs value={form.allotment_status} onChange={setStatus} tabs={STATUS_TABS} />
+            {form.allotment_status === 'LOST' && (
+              <p className="text-xs text-text-dim leading-relaxed">
+                미당첨 건은 일정만 저장됩니다. 배정·매도 정보는 입력하지 않습니다.
+              </p>
+            )}
+            {form.allotment_status === 'PENDING' && (
+              <p className="text-xs text-text-dim leading-relaxed">
+                배정 발표 전입니다. 결과가 나오면 「당첨」 또는 「미당첨」으로 수정해 주세요.
+              </p>
+            )}
           </div>
+
+          {wonForm && (
+            <>
+              <div className="rounded-xl border border-success/25 bg-success/5 px-4 py-3">
+                <p className="text-xs font-medium text-success">당첨 — 배정·매도 정보</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="배정 수량 (주)"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={form.quantity || ''}
+                  onChange={(e) => setForm((f) => ({ ...f, quantity: parseInt(e.target.value, 10) || 0 }))}
+                />
+                <Input
+                  label="배정가 (원)"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={form.allocation_price || ''}
+                  onChange={(e) => setForm((f) => ({ ...f, allocation_price: parseFloat(e.target.value) || 0 }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="매도일 (선택)"
+                  type="date"
+                  value={form.sell_date}
+                  onChange={(e) => setForm((f) => ({ ...f, sell_date: e.target.value }))}
+                />
+                <Input
+                  label="매도가 (원, 선택)"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={form.sell_price || ''}
+                  onChange={(e) => setForm((f) => ({ ...f, sell_price: parseFloat(e.target.value) || 0 }))}
+                />
+              </div>
+              <p className="text-xs text-text-dim -mt-2">
+                매도 전이면 매도일·매도가를 비워 두세요. 입력하면 수익률이 계산됩니다.
+              </p>
+
+              {(previewReturn !== null || previewProfit !== null) && (
+                <div className="rounded-xl border border-border bg-bg px-4 py-3">
+                  <p className="text-xs text-text-sub">수익률 (자동 계산)</p>
+                  <div className="mt-2 flex flex-wrap items-baseline gap-3">
+                    <span
+                      className={cn(
+                        'text-2xl font-bold',
+                        previewReturn !== null && previewReturn > 0 && 'text-success',
+                        previewReturn !== null && previewReturn < 0 && 'text-danger',
+                      )}
+                    >
+                      {formatIpoReturnPct(previewReturn)}
+                    </span>
+                    {previewProfit !== null && (
+                      <span className="text-sm text-text-sub">손익 {formatKrw(previewProfit)}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
           {error && <p className="text-sm text-danger">{error}</p>}
 
@@ -287,31 +361,49 @@ export function IpoNotesPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {ipoRecords.map((r) => {
-            const { pct, profit } = renderRecordReturn(r)
+            const ret = renderRecordReturn(r)
             return (
               <Card key={r.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-base font-semibold">{r.stock_name}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-base font-semibold">{r.stock_name}</p>
+                      <StatusBadge status={r.allotment_status} />
+                    </div>
                     <p className="mt-0.5 text-xs text-text-sub">{r.underwriter}</p>
                     <p className="mt-2 text-xs text-text-dim">
-                      {r.quantity}주 · 배정 ₩{Number(r.allocation_price).toLocaleString('ko-KR')}
-                      {r.sell_date && ` · 매도 ${r.sell_date}`}
-                      {r.sell_price != null && ` · ₩${Number(r.sell_price).toLocaleString('ko-KR')}`}
+                      {r.subscription_date && `청약 ${r.subscription_date}`}
+                      {r.listing_date && ` · 상장 ${r.listing_date}`}
                     </p>
+                    {r.allotment_status === 'WON' && (
+                      <p className="mt-1 text-xs text-text-dim">
+                        {r.quantity}주
+                        {r.allocation_price != null &&
+                          ` · 배정 ₩${Number(r.allocation_price).toLocaleString('ko-KR')}`}
+                        {r.sell_date && ` · 매도 ${r.sell_date}`}
+                        {r.sell_price != null &&
+                          ` · ₩${Number(r.sell_price).toLocaleString('ko-KR')}`}
+                      </p>
+                    )}
                   </div>
-                  <div className="text-right shrink-0">
-                    <p
-                      className={cn(
-                        'text-lg font-bold',
-                        pct !== null && pct > 0 && 'text-success',
-                        pct !== null && pct < 0 && 'text-danger',
-                      )}
-                    >
-                      {formatIpoReturnPct(pct)}
-                    </p>
-                    {profit !== null && (
-                      <p className="text-xs text-text-sub">{formatKrw(profit)}</p>
+                  <div className="shrink-0 text-right">
+                    {ret.label ? (
+                      <p className="text-sm font-medium text-text-sub">{ret.label}</p>
+                    ) : (
+                      <>
+                        <p
+                          className={cn(
+                            'text-lg font-bold',
+                            ret.pct !== null && ret.pct > 0 && 'text-success',
+                            ret.pct !== null && ret.pct < 0 && 'text-danger',
+                          )}
+                        >
+                          {formatIpoReturnPct(ret.pct)}
+                        </p>
+                        {ret.profit !== null && (
+                          <p className="text-xs text-text-sub">{formatKrw(ret.profit)}</p>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
