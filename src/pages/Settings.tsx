@@ -1,14 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useStore } from '@/store/useStore'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { supabase } from '@/lib/supabase'
-import { LogOut, Save, Check, Plus, Trash2 } from 'lucide-react'
+import { LogOut, Save, Check, Plus, Trash2, KeyRound } from 'lucide-react'
 import type { TradeType } from '@/lib/types'
 import { PAGE_SHELL } from '@/lib/pageLayout'
 import { cn } from '@/lib/cn'
+
+function formatPasswordChangeError(raw?: string): string {
+  const m = (raw ?? '').trim()
+  if (!m) return '비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  if (/same.*password|identical|already been used|re-use/i.test(m)) {
+    return '새 비밀번호가 예전과 같습니다. 이전과 다른 비밀번호를 입력해 주세요.'
+  }
+  if (/current password|wrong password|invalid login/i.test(m)) {
+    return '현재 비밀번호가 올바르지 않습니다.'
+  }
+  return m
+}
 
 export function SettingsPage() {
   const location = useLocation()
@@ -18,6 +30,13 @@ export function SettingsPage() {
   const [saved, setSaved] = useState<Set<string>>(new Set())
   const [addingType, setAddingType] = useState<TradeType | null>(null)
   const [addError, setAddError] = useState<string | null>(null)
+  const [showPasswordForm, setShowPasswordForm] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordMessage, setPasswordMessage] = useState('')
+  const [passwordLoading, setPasswordLoading] = useState(false)
 
   useEffect(() => {
     initStrategies()
@@ -63,6 +82,53 @@ export function SettingsPage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
+  }
+
+  const handlePasswordChange = async (e: FormEvent) => {
+    e.preventDefault()
+    setPasswordError('')
+    setPasswordMessage('')
+
+    if (!currentPassword.trim()) {
+      setPasswordError('현재 비밀번호를 입력해 주세요.')
+      return
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('새 비밀번호는 6자 이상이어야 합니다.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('새 비밀번호가 서로 일치하지 않습니다.')
+      return
+    }
+    if (currentPassword === newPassword) {
+      setPasswordError('새 비밀번호는 현재 비밀번호와 달라야 합니다.')
+      return
+    }
+
+    setPasswordLoading(true)
+    let err = (
+      await supabase.auth.updateUser({
+        password: newPassword,
+        current_password: currentPassword,
+      })
+    ).error
+
+    if (err && /current_password|current password/i.test(err.message ?? '')) {
+      err = (await supabase.auth.updateUser({ password: newPassword })).error
+    }
+    setPasswordLoading(false)
+
+    if (err) {
+      setPasswordError(formatPasswordChangeError(err.message))
+      return
+    }
+
+    setPasswordMessage('비밀번호가 변경되었습니다.')
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+    setShowPasswordForm(false)
   }
 
   const renderStrategyGroup = (label: string, type: TradeType, items: typeof strategies) => {
@@ -144,6 +210,83 @@ export function SettingsPage() {
       <Card className="flex flex-col gap-5">
         <h2 className="text-sm font-semibold text-text-sub">계정</h2>
         <p className="text-sm text-text-sub">{user?.email}</p>
+
+        {!showPasswordForm ? (
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={() => {
+              setShowPasswordForm(true)
+              setPasswordError('')
+              setPasswordMessage('')
+            }}
+          >
+            <KeyRound size={16} className="mr-2" />
+            비밀번호 변경
+          </Button>
+        ) : (
+          <form onSubmit={handlePasswordChange} className="flex flex-col gap-4 rounded-xl border border-border bg-bg p-4">
+            <p className="text-xs text-text-dim leading-relaxed">
+              현재 비밀번호를 확인한 뒤 새 비밀번호로 바꿉니다.
+            </p>
+            <Input
+              label="현재 비밀번호"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+            <Input
+              label="새 비밀번호"
+              type="password"
+              placeholder="6자 이상"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              minLength={6}
+              required
+            />
+            <Input
+              label="새 비밀번호 확인"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              minLength={6}
+              required
+            />
+            {passwordError && (
+              <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+                {passwordError}
+              </p>
+            )}
+            {passwordMessage && (
+              <p className="rounded-lg bg-success/10 px-3 py-2 text-sm text-success">{passwordMessage}</p>
+            )}
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="flex-1"
+                disabled={passwordLoading}
+                onClick={() => {
+                  setShowPasswordForm(false)
+                  setCurrentPassword('')
+                  setNewPassword('')
+                  setConfirmPassword('')
+                  setPasswordError('')
+                }}
+              >
+                취소
+              </Button>
+              <Button type="submit" className="flex-1" disabled={passwordLoading || !!passwordMessage}>
+                {passwordLoading ? '변경 중...' : '변경 저장'}
+              </Button>
+            </div>
+          </form>
+        )}
+
         <Button variant="danger" onClick={handleLogout} className="w-full">
           <LogOut size={16} className="mr-2" />
           로그아웃
