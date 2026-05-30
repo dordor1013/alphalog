@@ -2,7 +2,8 @@
 
 - [Changelog](changelog.md) — 날짜별 요약
 - [배포하기 (초보자 단계별)](../guides/배포하기-초보자용.md)
-- 최근 핸드오프: [진행중](../handoff.md) · [2026-05-18 이전본](../handoff-2026-05-18.md)
+- 최근 핸드오프: [진행중](../handoff.md) · [2026-05-18](../handoff-2026-05-18-2.md)
+- [Supabase 연결·가입 오류 복구](../guides/supabase-연결-복구.md)
 
 ## 주제
 

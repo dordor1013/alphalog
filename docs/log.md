@@ -1,5 +1,14 @@
 # Session log
 
+## [2026-05-30] session | Vercel·Supabase 가입/로그인, email rate limit
+
+- API 키·Paused 프로젝트·Vercel env 불일치 진단; `finish-setup`으로 .env·Auth URL 정렬
+- `email rate limit exceeded`: `rate_limit_email_sent: 2` + 확인 메일 → `mailer_autoconfirm: true` 패치
+- Auth 한국어 오류, signUp `emailRedirectTo`, 연결 probe, 배포/진단 스크립트
+- Commits: `2407ef1`, `e4119ac`
+
+상세: `docs/handoff.md`
+
 ## [2026-05-18] session | AlphaLog 브랜딩, 폼·여백·CSS 레이어, trade_options 마이그레이션
 
 - AlphaLog 리네임, 로고 `public/images/logo.png`, Auth·사이드바 반영.

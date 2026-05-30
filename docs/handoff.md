@@ -1,42 +1,39 @@
 # Session Handoff
 
-> Created: 2026-05-18  
-> 배포·가입 이슈·Auth UI 정리 및 문서 보강 (꽥꽥 핸드오프).
+> Created: 2026-05-30  
+> Vercel·Supabase 배포 가입/로그인 복구, 이메일 rate limit 해결.
 
 ## Context
 
-- **AlphaLog** Vercel 배포 중. 외부 가입 **`Failed to fetch`** 는 대부분 `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` 미설정·잘못된 URL·Redeploy 누락 때문.
-- **Project URL 규칙**: `Project Settings → API → Project URL` 은 **`https://xxx.supabase.co` 만.** Integrations → Data API 의 `…/rest/v1/` 포함 URL은 **넣으면 안 됨.**
-- **Auth UI**: 상단 탭 3개 제거. 깔끔한 카드 형태 로그인/회원가입. 비밀번호 찾기 링크는 **로그인 실패 후** 에만 노출 (`Auth.tsx`).
-- 비밀번호 재설정: `PasswordRecovery.tsx` + `App.tsx` 에서 recovery 해시/이벤트 처리. Supabase 클라이언트 `detectSessionInUrl: true`.
-- **`formatSupabaseAuthError`**: 네트워크 실패 시 한국어로 Vercel env·Preview·Redeploy 안내.
-- **PWA**: `vite.config.ts` 에 `skipWaiting`, `clientsClaim`, `cleanupOutdatedCaches` (구 번들 캐시 완화).
-- **Playwright**: `scripts/capture-vercel-ui.mjs` 로 배포 URL DOM/스크린샷 검증 가능. `npm run capture:vercel`. `artifacts/` gitignore.
+- **AlphaLog** 프로덕션: `https://alphalog-virid.vercel.app`
+- **Supabase** 살아 있는 프로젝트: `dkmbnnaeowoayewwhnmu` (Paused 해제·중복 프로젝트 1개 삭제)
+- Vercel env: `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`(Publishable) 정렬·Redeploy 완료
+- 로컬 `.env`는 `npm run setup:finish`로 배포와 동일 키 동기화
+- **가입 `email rate limit exceeded`**: 원인 `rate_limit_email_sent: 2` + 확인 메일 발송. **`mailer_autoconfirm: true`** 로 API 패치해 확인 메일 없이 가입(가입 API 200 확인)
+- Auth UX: 한국어 오류(`Invalid login credentials`, rate limit 등), `signUp`에 `emailRedirectTo`, 연결 사전 점검(`probeSupabaseReachability`)
+- Supabase Auth URL: Site/Redirect에 Vercel + localhost (`finish-setup` / Management API)
 
 ## Open Items
 
-- [ ] 로컬에 **커밋 안 된 변경**: `.gitignore`, `package.json` / `package-lock.json` (playwright 추가), `scripts/` — 필요 시 한 커밋으로 정리 후 push.
-- [ ] Vercel **Environment Variables**: `VITE_SUPABASE_URL` 이 **반드시** `/rest/v1/` 없는 루트 URL 인지 사용자 최종 확인 후 **Redeploy**.
-- [ ] Supabase **Authentication → URL Configuration** 에 프로덕션 도메인(예: `alphalog-virid.vercel.app` 및 `/**`) 허용.
-- [ ] 가입 테스트: 시크릿 창에서 회원가입·로그인·(선택) 비번 재설정.
+- [ ] Vercel에서 **실사용자 이메일**(예: `gaminem9@gmail.com`)로 회원가입·로그인 재확인
+- [ ] 신규 사용자 매매 저장까지 E2E (마이그레이션 001~003 적용 여부)
+- [ ] 나중에 **이메일 인증** 다시 켤 경우: Custom SMTP + `mailer_autoconfirm: false` + Rate Limits 상향
 
 ## Key Decisions Made
 
-- 초보 사용자를 위해 **`docs/guides/배포하기-초보자용.md`** 에 Preview env, Key/Value 주의, 비번 재설정·Failed to fetch 안내 추가.
-- “탭 버튼” 레이아웃 포기하고 **실패 후에만** 비번 찾기 노출 (사용자 요청).
-- 라이브 UI 검증은 **Playwright 스크립트**로 재현 가능하게 함.
+- 무료 SMTP **시간당 2통** 한도 때문에 운영 초기는 **`mailer_autoconfirm: true`**(즉시 가입) 선택
+- Supabase UI 이름 변경 반영: **API URL** / **Publishable·anon** (문서 `supabase-연결-복구.md`, `배포하기-초보자용.md`)
+- 진단·복구 스크립트: `check:deploy`, `check:api-key`, `test:production`, `setup:finish`, `fix:auth-rate`, `investigate-auth-rate`
 
 ## Files to Review
 
-- `src/pages/Auth.tsx` — 로그인/가입/forgot 플로·에러 메시지.
-- `src/App.tsx` — `passwordRecoveryMode`·세션 처리.
-- `src/lib/supabase.ts` — `trim()`, `detectSessionInUrl`.
-- `vite.config.ts` — PWA workbox.
-- `docs/guides/배포하기-초보자용.md` — Vercel UI 경로(Environment Variables 등).
-- `scripts/capture-vercel-ui.mjs` — 배포 URL 스냅샷.
+- `src/pages/Auth.tsx` — 한국어 Auth 오류·가입 메시지
+- `scripts/fix-auth-rate-limit.mjs` — autoconfirm 재적용
+- `scripts/finish-setup.mjs` — .env + Auth URL 동기화
+- `docs/guides/supabase-연결-복구.md` — rate limit·API URL 안내
 
 ## Notes for Next Session
 
-- Vercel은 **프로젝트 위에 탭형 Settings 가 없고** 왼쪽 사이드에 **Environment Variables** 가 있다 (사용자 혼선).
-- `npm warn deprecated`(glob, source-map-beta) 은 트랜지티브 경고라 **설치 성공 시** 보통 무시 가능.
-- 다음 세션 시작 시 `session-start` 스킬이 있으면 이 파일을 읽은 뒤 `docs/handoff-2026-05-18-2.md` 등으로 중복 방지 이름으로 아카이브해야 함 (`handoff-2026-05-18.md` 가 이미 있으므로 이름 충돌 시 `-2`).
+- `SUPABASE_ACCESS_TOKEN`은 `.env`만 (Git 제외). Management API로 Auth 설정 변경 가능
+- `Invalid login credentials` = 연결 OK, **이 프로젝트에 계정 없음/비번 틀림** → 회원가입
+- handoff 아카이브: `session-start` 시 `docs/handoff-2026-05-30.md` 등으로 rename

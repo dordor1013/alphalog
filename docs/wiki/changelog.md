@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-05-30
+
+- Vercel·Supabase 연결 복구(URL·Publishable 키, Redeploy), 로컬 `.env` 동기화(`setup:finish`)
+- 가입 실패 `email rate limit exceeded` → Supabase `mailer_autoconfirm: true`, 한국어 Auth 오류·가입 완료 메시지
+- 문서: `supabase-연결-복구.md`(API URL·rate limit), 배포 가이드 UI 용어 갱신
+- 스크립트: `check:deploy`, `test:production`, `fix:auth-rate`, `investigate-auth-rate` 등
+
 ## 2026-05-18
 
 - AlphaLog 브랜딩, 로그인·사이드바, 매매 기록 폼(공통 금액·태그 행 저장), 마이그레이션 003, 로그인 로고/카피, `index.css` `@layer base`로 Tailwind margin 정상화.
