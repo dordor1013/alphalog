@@ -1,14 +1,38 @@
-import { useState } from 'react'
-import { supabase, supabaseConfigured } from '@/lib/supabase'
+import { useEffect, useState } from 'react'
+import {
+  probeSupabaseReachability,
+  supabase,
+  supabaseConfigured,
+  supabaseUrlLooksValid,
+} from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 
-/** "Failed to fetch" 등 브라우저 네트워크 오류 → 배포 설정 안내로 바꿈 */
-function formatSupabaseAuthError(raw?: string): string {
+/** Supabase Auth 영문 오류 → 한국어 안내 */
+function formatSupabaseAuthError(raw?: string, code?: string): string {
   const m = (raw ?? '').trim()
+  const c = (code ?? '').toLowerCase()
+
+  if (c === 'invalid_credentials' || /invalid\s*login\s*credentials/i.test(m)) {
+    return (
+      '이메일 또는 비밀번호가 올바르지 않습니다. ' +
+      '이 사이트에 아직 가입하지 않았다면 아래 「회원가입」을 이용해 주세요. ' +
+      '가입은 했는데 비밀번호가 기억나지 않으면 「비밀번호를 잊으셨나요?」로 재설정할 수 있습니다.'
+    )
+  }
   if (!m) return '알 수 없는 오류가 났습니다. 잠시 후 다시 시도해 주세요.'
   if (/failed to fetch|networkerror|network request failed|load failed|네트워크/i.test(m)) {
-    return '서버와 연결할 수 없습니다. 배포 설정(Vercel 등)에서 VITE_SUPABASE_URL·VITE_SUPABASE_ANON_KEY가 들어있는지 확인하고, Production과 Preview 모두 체크한 뒤 Redeploy 한 다음 다시 시도해 주세요.'
+    return (
+      'Supabase에 연결할 수 없습니다. (1) Supabase 대시보드에서 프로젝트가 삭제·일시중지되지 않았는지, ' +
+      '(2) API URL이 https://프로젝트ref.supabase.co 형태인지(/rest/v1/ 없음), ' +
+      '(3) Vercel Environment Variables의 URL·anon 키가 같은 프로젝트에서 복사한 짝인지 확인한 뒤 Production·Preview에 넣고 Redeploy 해 주세요.'
+    )
+  }
+  if (/invalid api key/i.test(m)) {
+    return (
+      'Supabase API 키가 맞지 않습니다. Project Settings → Data API의 API URL과 ' +
+      'API Keys의 Publishable(또는 anon) 키를 한 쌍으로 Vercel·.env에 넣은 뒤 Redeploy 해 주세요.'
+    )
   }
   return m
 }
@@ -33,6 +57,34 @@ export function AuthPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [connectionHint, setConnectionHint] = useState('')
+
+  useEffect(() => {
+    if (!supabaseConfigured()) {
+      setConnectionHint('Supabase URL·키가 비어 있습니다. .env 또는 Vercel 환경 변수를 설정해 주세요.')
+      return
+    }
+    if (!supabaseUrlLooksValid()) {
+      setConnectionHint(
+        'Supabase 주소 형식이 잘못되었습니다. https://프로젝트ref.supabase.co 만 사용하세요. (/rest/v1/ 금지)',
+      )
+      return
+    }
+    let cancelled = false
+    probeSupabaseReachability().then((status) => {
+      if (cancelled) return
+      if (status === 'unreachable') {
+        setConnectionHint(
+          '지금 설정된 Supabase 주소에 연결되지 않습니다. 프로젝트가 삭제됐거나 URL·anon 키가 서로 다른 프로젝트 것일 수 있습니다. Supabase → Project Settings → API에서 다시 복사해 Vercel에 넣고 Redeploy 하세요.',
+        )
+      } else {
+        setConnectionHint('')
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,21 +103,33 @@ export function AuthPage() {
       if (!trimmed) { setError('이메일을 입력해주세요.'); setLoading(false); return }
       const redirectTo = `${window.location.origin}${window.location.pathname}`
       const { error: err } = await supabase.auth.resetPasswordForEmail(trimmed, { redirectTo })
-      if (err) setError(formatSupabaseAuthError(err.message))
+      if (err) setError(formatSupabaseAuthError(err.message, err.code))
       else setMessage('재설정 메일을 보냈습니다. 메일함(스팸함 포함)을 확인해 주세요.')
     } else if (isLogin) {
       const { error: err } = await supabase.auth.signInWithPassword({ email, password })
       if (err) {
-        setError(formatSupabaseAuthError(err.message))
+        setError(formatSupabaseAuthError(err.message, err.code))
         // 비번 틀림 등일 때만 비번 찾기 안내 — 네트워크 장애일 땐 혼동 방지
         if (!/failed to fetch|networkerror|network request failed|load failed/i.test(err.message ?? '')) {
           setShowForgotHint(true)
         }
       }
     } else {
-      const { error: err } = await supabase.auth.signUp({ email, password })
-      if (err) setError(formatSupabaseAuthError(err.message))
-      else setMessage('확인 이메일을 전송했습니다. 이메일을 확인해주세요.')
+      const emailRedirectTo = `${window.location.origin}${window.location.pathname}`
+      const { error: err } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo },
+      })
+      if (err) setError(formatSupabaseAuthError(err.message, err.code))
+      else {
+        setMessage(
+          '확인 이메일을 전송했습니다. 메일함(스팸함 포함)을 확인해 주세요. ' +
+            '링크는 가입한 주소(' +
+            window.location.host +
+            ')로 돌아옵니다. localhost에서 가입했다면 확인 전에 npm run dev로 서버를 켜 두세요.',
+        )
+      }
     }
 
     setLoading(false)
@@ -105,6 +169,11 @@ export function AuthPage() {
           </>
         ) : (
           <>
+            {connectionHint && (
+              <p className="mb-5 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger leading-relaxed">
+                {connectionHint}
+              </p>
+            )}
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               <Input label="이메일" type="email" placeholder="email@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
               <Input label="비밀번호" type="password" placeholder="6자 이상" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
