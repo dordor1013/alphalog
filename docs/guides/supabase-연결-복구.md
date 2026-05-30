@@ -44,7 +44,20 @@ npm run check:deploy
 
 프로젝트 대시보드 상단 **Connect** 버튼 → 프레임워크 선택 → 표시되는 **URL + Publishable/anon key** 를 그대로 써도 됩니다.
 
-### 2-5. 가입 확인 메일 링크 (localhost 연결 거부)
+### 2-5. `email rate limit exceeded` (가입 시)
+
+Supabase **무료 기본 메일**은 프로젝트 전체 **시간당 약 2통**(`rate_limit_email_sent: 2`)입니다. 확인 메일을 켜 두면(`mailer_autoconfirm: false`) 가입·재시도가 금방 한도에 걸립니다.
+
+**조치 (관리자):**
+
+```bash
+npm run fix:auth-rate
+```
+
+- `mailer_autoconfirm: true` → 확인 메일 없이 가입 완료(다른 사람 가입에 유리)
+- 나중에 SMTP 연결 후 확인 메일을 다시 켤 수 있음
+
+### 2-6. 가입 확인 메일 링크 (localhost 연결 거부)
 
 메일의 **Confirm email** 링크가 `localhost`로 가면:
 
@@ -54,7 +67,7 @@ npm run check:deploy
   - Redirect URLs: `https://내앱.vercel.app`, `https://내앱.vercel.app/**`, (개발용) `http://localhost:5173`, `http://localhost:5173/**`  
   - 저장 후 **다시 회원가입**하거나 Supabase **Authentication → Users**에서 해당 사용자에게 확인 메일 재발송
 
-### 2-6. DB 마이그레이션
+### 2-7. DB 마이그레이션
 
 새 프로젝트면 SQL Editor에서 `supabase/migrations/` **001 → 002 → 003** 순서 실행.
 

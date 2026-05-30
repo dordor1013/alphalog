@@ -34,6 +34,15 @@ function formatSupabaseAuthError(raw?: string, code?: string): string {
       'API Keys의 Publishable(또는 anon) 키를 한 쌍으로 Vercel·.env에 넣은 뒤 Redeploy 해 주세요.'
     )
   }
+  if (
+    c === 'over_email_send_rate_limit' ||
+    /email rate limit exceeded/i.test(m)
+  ) {
+    return (
+      '가입 확인 메일을 너무 많이 보내서 잠시 제한되었습니다. 30분~1시간 뒤 다시 시도하거나, ' +
+      'Supabase 무료 플랜은 시간당 확인 메일 개수가 매우 적습니다. 관리자가 Authentication → Rate Limits를 확인해 주세요.'
+    )
+  }
   return m
 }
 
@@ -123,12 +132,7 @@ export function AuthPage() {
       })
       if (err) setError(formatSupabaseAuthError(err.message, err.code))
       else {
-        setMessage(
-          '확인 이메일을 전송했습니다. 메일함(스팸함 포함)을 확인해 주세요. ' +
-            '링크는 가입한 주소(' +
-            window.location.host +
-            ')로 돌아옵니다. localhost에서 가입했다면 확인 전에 npm run dev로 서버를 켜 두세요.',
-        )
+        setMessage('회원가입이 완료되었습니다. 잠시 후 로그인됩니다.')
       }
     }
 

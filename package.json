@@ -12,7 +12,8 @@
     "check:deploy": "node scripts/check-deploy-supabase.mjs",
     "check:api-key": "node scripts/diagnose-api-key.mjs",
     "test:production": "node scripts/test-production-auth.mjs",
-    "setup:finish": "node scripts/finish-setup.mjs"
+    "setup:finish": "node scripts/finish-setup.mjs",
+    "fix:auth-rate": "node scripts/fix-auth-rate-limit.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

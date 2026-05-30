@@ -2,6 +2,7 @@ node_modules
 dist
 .env
 .env.local
+debug-log.txt
 *.local
 .DS_Store
 artifacts/
