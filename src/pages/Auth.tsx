@@ -3,8 +3,10 @@ import {
   probeSupabaseReachability,
   supabase,
   supabaseConfigured,
+  supabaseKeyLooksValid,
   supabaseUrlLooksValid,
 } from '@/lib/supabase'
+import { resetLocalSupabaseAuth } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 
@@ -32,6 +34,11 @@ function formatSupabaseAuthError(raw?: string, code?: string): string {
     return (
       'Supabase API 키가 맞지 않습니다. Project Settings → Data API의 API URL과 ' +
       'API Keys의 Publishable(또는 anon) 키를 한 쌍으로 Vercel·.env에 넣은 뒤 Redeploy 해 주세요.'
+    )
+  }
+  if (c === 'user_already_exists' || /already registered|already been registered/i.test(m)) {
+    return (
+      '이 이메일은 이미 가입되어 있습니다. 회원가입 대신 「로그인」을 하거나, 비밀번호를 모르면 「비밀번호를 잊으셨나요?」로 재설정하세요. 재설정 시에는 예전과 다른 새 비밀번호를 입력해야 합니다.'
     )
   }
   if (
@@ -79,10 +86,21 @@ export function AuthPage() {
       )
       return
     }
+    if (!supabaseKeyLooksValid()) {
+      setConnectionHint(
+        'Supabase API 키 형식이 잘못되었습니다. Project Settings → API Keys에서 Publishable(sb_publishable_…) 또는 anon(eyJ…) 키를 복사해 .env·Vercel에 넣고, 개발 서버를 재시작하거나 배포를 Redeploy 하세요.',
+      )
+      return
+    }
     let cancelled = false
     probeSupabaseReachability().then((status) => {
       if (cancelled) return
-      if (status === 'unreachable') {
+      if (status === 'invalid_key' || status === 'bad_key') {
+        void resetLocalSupabaseAuth()
+        setConnectionHint(
+          'Supabase API 키가 거부되었습니다. 대시보드에서 URL·Publishable(또는 anon) 키를 같은 프로젝트에서 다시 복사해 넣은 뒤, 브라우저에서 강력 새로고침(Ctrl+Shift+R) 또는 PWA를 삭제 후 다시 접속하세요. 로컬은 npm run setup:finish 후 npm run dev 재시작.',
+        )
+      } else if (status === 'unreachable') {
         setConnectionHint(
           '지금 설정된 Supabase 주소에 연결되지 않습니다. 프로젝트가 삭제됐거나 URL·anon 키가 서로 다른 프로젝트 것일 수 있습니다. Supabase → Project Settings → API에서 다시 복사해 Vercel에 넣고 Redeploy 하세요.',
         )
@@ -107,19 +125,31 @@ export function AuthPage() {
 
     setLoading(true)
 
+    const onAuthError = (err: { message?: string; code?: string }) => {
+      const msg = formatSupabaseAuthError(err.message, err.code)
+      if (/invalid api key/i.test(err.message ?? '')) {
+        void resetLocalSupabaseAuth()
+        setError(
+          `${msg} 예전 앱 캐시가 남았을 수 있습니다. 강력 새로고침(Ctrl+Shift+R) 후 다시 로그인해 주세요.`,
+        )
+      } else {
+        setError(msg)
+      }
+    }
+
     if (forgotMode) {
       const trimmed = email.trim()
       if (!trimmed) { setError('이메일을 입력해주세요.'); setLoading(false); return }
       const redirectTo = `${window.location.origin}${window.location.pathname}`
       const { error: err } = await supabase.auth.resetPasswordForEmail(trimmed, { redirectTo })
-      if (err) setError(formatSupabaseAuthError(err.message, err.code))
+      if (err) onAuthError(err)
       else setMessage('재설정 메일을 보냈습니다. 메일함(스팸함 포함)을 확인해 주세요.')
     } else if (isLogin) {
       const { error: err } = await supabase.auth.signInWithPassword({ email, password })
       if (err) {
-        setError(formatSupabaseAuthError(err.message, err.code))
+        onAuthError(err)
         // 비번 틀림 등일 때만 비번 찾기 안내 — 네트워크 장애일 땐 혼동 방지
-        if (!/failed to fetch|networkerror|network request failed|load failed/i.test(err.message ?? '')) {
+        if (!/failed to fetch|networkerror|network request failed|load failed|invalid api key/i.test(err.message ?? '')) {
           setShowForgotHint(true)
         }
       }
@@ -130,7 +160,7 @@ export function AuthPage() {
         password,
         options: { emailRedirectTo },
       })
-      if (err) setError(formatSupabaseAuthError(err.message, err.code))
+      if (err) onAuthError(err)
       else {
         setMessage('회원가입이 완료되었습니다. 잠시 후 로그인됩니다.')
       }

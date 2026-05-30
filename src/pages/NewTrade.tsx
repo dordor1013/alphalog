@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { format } from 'date-fns'
+import { Settings } from 'lucide-react'
 import { formatCurrency, currencySymbol, currencyUnit, type Market, type TradeType, type TradeFormData } from '@/lib/types'
 import { PAGE_SHELL } from '@/lib/pageLayout'
 import { cn } from '@/lib/cn'
@@ -210,7 +211,20 @@ export function NewTradePage() {
         </div>
 
         {relevantStrategies.length === 0 && (
-          <p className="text-sm text-text-sub">옵션이 없습니다. 설정에서 옵션을 추가해주세요.</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-text-sub">
+              옵션이 없습니다. 설정에서 {isBuy ? '매수' : '매도'} 기준 옵션을 추가해주세요.
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="shrink-0"
+              onClick={() => navigate('/settings', { state: { focusType: tradeType } })}
+            >
+              <Settings size={14} className="mr-1.5" />
+              설정에서 옵션 추가
+            </Button>
+          </div>
         )}
       </Card>
 

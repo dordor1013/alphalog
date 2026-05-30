@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/validate-env.mjs && tsc -b && vite build",
+    "sync:env": "node scripts/finish-setup.mjs",
+    "reset:password": "node scripts/admin-reset-password.mjs",
+    "db:migrate": "node scripts/apply-migrations.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "capture:vercel": "node scripts/capture-vercel-ui.mjs",

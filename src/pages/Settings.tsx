@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useStore } from '@/store/useStore'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -10,9 +11,34 @@ import { PAGE_SHELL } from '@/lib/pageLayout'
 import { cn } from '@/lib/cn'
 
 export function SettingsPage() {
-  const { strategies, updateStrategyName, addStrategy, deleteStrategy, user } = useStore()
+  const location = useLocation()
+  const focusType = (location.state as { focusType?: TradeType } | null)?.focusType
+  const { strategies, updateStrategyName, addStrategy, deleteStrategy, user, initStrategies } = useStore()
   const [editing, setEditing] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState<Set<string>>(new Set())
+  const [addingType, setAddingType] = useState<TradeType | null>(null)
+  const [addError, setAddError] = useState<string | null>(null)
+
+  useEffect(() => {
+    initStrategies()
+  }, [initStrategies])
+
+  useEffect(() => {
+    if (!focusType) return
+    document.getElementById(`strategy-group-${focusType}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [focusType])
+
+  const handleAddStrategy = async (type: TradeType) => {
+    setAddError(null)
+    setAddingType(type)
+    const ok = await addStrategy(type)
+    setAddingType(null)
+    if (!ok) {
+      setAddError(
+        '옵션을 추가하지 못했습니다. DB 테이블이 없으면 터미널에서 npm run db:migrate 를 실행하세요. 그래도 안 되면 새로고침 후 다시 시도해주세요.',
+      )
+    }
+  }
 
   const buyStrategies = strategies.filter((s) => s.type === 'BUY').sort((a, b) => a.option_number - b.option_number)
   const sellStrategies = strategies.filter((s) => s.type === 'SELL').sort((a, b) => a.option_number - b.option_number)
@@ -45,7 +71,7 @@ export function SettingsPage() {
     const borderClass = isBuy ? 'border-buy/20' : 'border-sell/20'
 
     return (
-      <Card className="flex flex-1 flex-col gap-5">
+      <Card id={`strategy-group-${type}`} className="flex flex-1 flex-col gap-5 scroll-mt-6">
         <h2 className={`text-sm font-semibold ${accentClass}`}>{label}</h2>
         <div className="flex flex-col gap-4">
           {items.map((s) => {
@@ -92,9 +118,11 @@ export function SettingsPage() {
           variant="secondary"
           size="sm"
           className="w-full"
-          onClick={() => addStrategy(type)}
+          disabled={addingType === type}
+          onClick={() => handleAddStrategy(type)}
         >
-          <Plus size={14} className="mr-1.5" /> 옵션 추가
+          <Plus size={14} className="mr-1.5" />
+          {addingType === type ? '추가 중...' : '옵션 추가'}
         </Button>
       </Card>
     )
@@ -108,6 +136,10 @@ export function SettingsPage() {
         {renderStrategyGroup('매수 기준', 'BUY', buyStrategies)}
         {renderStrategyGroup('매도 기준', 'SELL', sellStrategies)}
       </div>
+
+      {addError && (
+        <p className="text-sm text-danger" role="alert">{addError}</p>
+      )}
 
       <Card className="flex flex-col gap-5">
         <h2 className="text-sm font-semibold text-text-sub">계정</h2>

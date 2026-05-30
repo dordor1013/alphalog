@@ -20,6 +20,12 @@ export default defineConfig({
         clientsClaim: true,
         skipWaiting: true,
         cleanupOutdatedCaches: true,
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/[a-z0-9]+\.supabase\.co\/.*/i,
+            handler: 'NetworkOnly',
+          },
+        ],
       },
       manifest: {
         name: 'AlphaLog',

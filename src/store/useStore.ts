@@ -15,7 +15,7 @@ interface AppState {
   deleteTrade: (id: string) => Promise<void>
   fetchStrategies: () => Promise<void>
   updateStrategyName: (id: string, name: string) => Promise<void>
-  addStrategy: (type: TradeType) => Promise<void>
+  addStrategy: (type: TradeType) => Promise<boolean>
   deleteStrategy: (id: string) => Promise<void>
   initStrategies: () => Promise<void>
   getTradesByMarket: (market: Market) => Trade[]
@@ -98,17 +98,18 @@ export const useStore = create<AppState>((set, get) => ({
     const { user } = get()
     if (!user) return
 
-    const { data: existing } = await supabase
-      .from('strategies')
-      .select('id')
-      .eq('user_id', user.id)
-
-    if (existing && existing.length > 0) return
-
-    const defaults: Omit<Strategy, 'id'>[] = []
     const types: TradeType[] = ['BUY', 'SELL']
 
     for (const type of types) {
+      const { data: existing } = await supabase
+        .from('strategies')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('type', type)
+
+      if (existing && existing.length > 0) continue
+
+      const defaults: Omit<Strategy, 'id'>[] = []
       for (let n = 1; n <= 3; n++) {
         defaults.push({
           user_id: user.id,
@@ -117,9 +118,11 @@ export const useStore = create<AppState>((set, get) => ({
           name: `${type === 'BUY' ? '매수' : '매도'} 옵션 ${n}`,
         })
       }
+
+      const { error } = await supabase.from('strategies').insert(defaults)
+      if (error) console.error('[initStrategies]', type, error.message)
     }
 
-    await supabase.from('strategies').insert(defaults)
     await get().fetchStrategies()
   },
 
@@ -129,21 +132,29 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   addStrategy: async (type) => {
-    const { user, strategies } = get()
-    if (!user) return
+    const { user } = get()
+    if (!user) return false
 
-    const sameType = strategies.filter((s) => s.type === type)
+    await get().fetchStrategies()
+    const sameType = get().strategies.filter((s) => s.type === type)
     const nextNumber = sameType.length > 0
       ? Math.max(...sameType.map((s) => s.option_number)) + 1
       : 1
 
-    await supabase.from('strategies').insert({
+    const { error } = await supabase.from('strategies').insert({
       user_id: user.id,
       type,
       option_number: nextNumber,
       name: `${type === 'BUY' ? '매수' : '매도'} 옵션 ${nextNumber}`,
     })
+
+    if (error) {
+      console.error('[addStrategy]', error.message, error.code)
+      return false
+    }
+
     await get().fetchStrategies()
+    return true
   },
 
   deleteStrategy: async (id) => {

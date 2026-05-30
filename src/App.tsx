@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { resetLocalSupabaseAuth } from '@/lib/supabase'
 import { useStore } from '@/store/useStore'
 import { BottomNav, Sidebar } from '@/components/BottomNav'
 import { AuthPage, detectPasswordRecoveryHash } from '@/pages/Auth'
@@ -23,7 +24,10 @@ export default function App() {
     // 메일 재설정 링크 진입 시, getSession 처리 전에 한 번이라도 해시 확인
     if (detectPasswordRecoveryHash()) setPasswordRecoveryMode(true)
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error && /invalid api key/i.test(error.message ?? '')) {
+        void resetLocalSupabaseAuth()
+      }
       if (detectPasswordRecoveryHash()) setPasswordRecoveryMode(true)
       setUser(session?.user ?? null)
       setReady(true)

@@ -26,7 +26,14 @@ export function PasswordRecoveryForm({ onComplete }: { onComplete: () => void })
     const { error: err } = await supabase.auth.updateUser({ password })
     setLoading(false)
     if (err) {
-      setError(err.message)
+      const m = err.message ?? ''
+      if (/same.*password|identical|already been used|re-use/i.test(m)) {
+        setError(
+          '지금 입력한 비밀번호가 예전과 같습니다. 로그인에 쓰던 비밀번호 말고, 완전히 새 비밀번호(예: AlphaLog2026!새비번)를 입력해 주세요.',
+        )
+      } else {
+        setError(m)
+      }
       return
     }
     setMessage('비밀번호가 변경되었습니다. 이제 이 비밀번호로 로그인할 수 있습니다.')
