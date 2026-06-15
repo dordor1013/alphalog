@@ -1,0 +1,97 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 서명 키스토어가 없으면 한 번 생성해서 레포에 커밋한다.
+      # 이렇게 하면 이후 모든 빌드가 같은 키로 서명되어, 폰에서 덮어쓰기 설치를 해도 기존 데이터가 보존된다.
+      - name: Ensure signing keystore
+        run: |
+          KEYSTORE=android/app/alphalog-release.keystore
+          if [ ! -f "$KEYSTORE" ]; then
+            echo "키스토어 생성 중..."
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE" \
+              -alias alphalog \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass alphalog -keypass alphalog \
+              -dname "CN=AlphaLog, OU=Personal, O=AlphaLog, L=Seoul, ST=Seoul, C=KR"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -f "$KEYSTORE"
+            git commit -m "chore: add release signing keystore [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          else
+            echo "키스토어가 이미 존재합니다."
+          fi
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build release APK
+        env:
+          ALPHALOG_VERSION_CODE: ${{ github.run_number }}
+          ALPHALOG_VERSION_NAME: 1.0.${{ github.run_number }}
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk AlphaLog.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AlphaLog-apk
+          path: AlphaLog.apk
+
+      - name: Publish to latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: AlphaLog 최신 APK
+          body: |
+            자동 빌드된 AlphaLog APK입니다.
+            아래 `AlphaLog.apk`를 폰에서 받아 설치하세요. (기존 앱 위에 덮어쓰기 설치하면 데이터가 유지됩니다.)
+
+            빌드 번호: ${{ github.run_number }}
+          files: AlphaLog.apk
+          make_latest: true

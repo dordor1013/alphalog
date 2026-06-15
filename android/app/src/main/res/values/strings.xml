@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AlphaLog</string>
+    <string name="title_activity_main">AlphaLog</string>
+    <string name="package_name">com.alphalog.app</string>
+    <string name="custom_url_scheme">com.alphalog.app</string>
+</resources>

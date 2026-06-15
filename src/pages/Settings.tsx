@@ -1,42 +1,138 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useStore } from '@/store/useStore'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { supabase } from '@/lib/supabase'
-import { LogOut, Save, Check, Plus, Trash2, KeyRound } from 'lucide-react'
+import { exportAll, importAll } from '@/lib/localdb'
+import { Save, Check, Plus, Trash2, Download, Upload, Copy } from 'lucide-react'
 import type { TradeType } from '@/lib/types'
 import { PAGE_SHELL } from '@/lib/pageLayout'
 import { cn } from '@/lib/cn'
 
-function formatPasswordChangeError(raw?: string): string {
-  const m = (raw ?? '').trim()
-  if (!m) return '비밀번호를 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.'
-  if (/same.*password|identical|already been used|re-use/i.test(m)) {
-    return '새 비밀번호가 예전과 같습니다. 이전과 다른 비밀번호를 입력해 주세요.'
+function BackupCard() {
+  const { loadAll } = useStore()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
+
+  const notify = (type: 'ok' | 'error', text: string) => {
+    setMessage({ type, text })
+    setTimeout(() => setMessage(null), 4000)
   }
-  if (/current password|wrong password|invalid login/i.test(m)) {
-    return '현재 비밀번호가 올바르지 않습니다.'
+
+  const handleExport = async () => {
+    try {
+      const bundle = await exportAll()
+      const json = JSON.stringify(bundle, null, 2)
+      const stamp = new Date().toISOString().slice(0, 10)
+      const filename = `alphalog-backup-${stamp}.json`
+
+      const file = new File([json], filename, { type: 'application/json' })
+      const nav = navigator as Navigator & { canShare?: (data?: ShareData) => boolean }
+      if (nav.canShare?.({ files: [file] }) && navigator.share) {
+        await navigator.share({ files: [file], title: 'AlphaLog 백업' })
+        return
+      }
+
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      notify('ok', '백업 파일을 저장했습니다.')
+    } catch {
+      notify('error', '내보내기에 실패했습니다. 아래 "복사"로 백업해 주세요.')
+    }
   }
-  return m
+
+  const handleCopy = async () => {
+    try {
+      const bundle = await exportAll()
+      await navigator.clipboard.writeText(JSON.stringify(bundle))
+      notify('ok', '백업 데이터를 클립보드에 복사했습니다.')
+    } catch {
+      notify('error', '복사에 실패했습니다.')
+    }
+  }
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const text = await file.text()
+      const parsed = JSON.parse(text)
+      await importAll(parsed)
+      await loadAll()
+      notify('ok', '백업을 불러왔습니다.')
+    } catch (err) {
+      notify('error', err instanceof Error ? err.message : '가져오기에 실패했습니다.')
+    }
+  }
+
+  return (
+    <Card className="flex flex-col gap-5">
+      <div>
+        <h2 className="text-sm font-semibold text-text-sub">데이터 백업</h2>
+        <p className="mt-1 text-xs text-text-dim leading-relaxed">
+          모든 데이터는 이 기기에만 저장됩니다. 기기 변경·앱 삭제에 대비해 주기적으로 백업하세요.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button variant="secondary" className="flex-1" onClick={handleExport}>
+          <Download size={16} className="mr-2" />
+          내보내기
+        </Button>
+        <Button variant="secondary" className="flex-1" onClick={handleCopy}>
+          <Copy size={16} className="mr-2" />
+          복사
+        </Button>
+        <Button variant="secondary" className="flex-1" onClick={() => fileInputRef.current?.click()}>
+          <Upload size={16} className="mr-2" />
+          가져오기
+        </Button>
+      </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={handleFile}
+      />
+
+      <p className="text-xs text-text-dim leading-relaxed">
+        가져오기를 하면 현재 데이터가 백업 파일 내용으로 <span className="text-danger">덮어쓰기</span> 됩니다.
+      </p>
+
+      {message && (
+        <p
+          className={cn(
+            'rounded-lg px-3 py-2 text-sm',
+            message.type === 'ok' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger',
+          )}
+          role="alert"
+        >
+          {message.text}
+        </p>
+      )}
+    </Card>
+  )
 }
 
 export function SettingsPage() {
   const location = useLocation()
   const focusType = (location.state as { focusType?: TradeType } | null)?.focusType
-  const { strategies, updateStrategyName, addStrategy, deleteStrategy, user, initStrategies } = useStore()
+  const { strategies, updateStrategyName, addStrategy, deleteStrategy, initStrategies } = useStore()
   const [editing, setEditing] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState<Set<string>>(new Set())
   const [addingType, setAddingType] = useState<TradeType | null>(null)
   const [addError, setAddError] = useState<string | null>(null)
-  const [showPasswordForm, setShowPasswordForm] = useState(false)
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [passwordError, setPasswordError] = useState('')
-  const [passwordMessage, setPasswordMessage] = useState('')
-  const [passwordLoading, setPasswordLoading] = useState(false)
 
   useEffect(() => {
     initStrategies()
@@ -53,9 +149,7 @@ export function SettingsPage() {
     const ok = await addStrategy(type)
     setAddingType(null)
     if (!ok) {
-      setAddError(
-        '옵션을 추가하지 못했습니다. DB 테이블이 없으면 터미널에서 npm run db:migrate 를 실행하세요. 그래도 안 되면 새로고침 후 다시 시도해주세요.',
-      )
+      setAddError('옵션을 추가하지 못했습니다. 잠시 후 다시 시도해주세요.')
     }
   }
 
@@ -78,57 +172,6 @@ export function SettingsPage() {
     })
     setSaved((prev) => new Set(prev).add(id))
     setTimeout(() => setSaved((prev) => { const next = new Set(prev); next.delete(id); return next }), 1500)
-  }
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-  }
-
-  const handlePasswordChange = async (e: FormEvent) => {
-    e.preventDefault()
-    setPasswordError('')
-    setPasswordMessage('')
-
-    if (!currentPassword.trim()) {
-      setPasswordError('현재 비밀번호를 입력해 주세요.')
-      return
-    }
-    if (newPassword.length < 6) {
-      setPasswordError('새 비밀번호는 6자 이상이어야 합니다.')
-      return
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError('새 비밀번호가 서로 일치하지 않습니다.')
-      return
-    }
-    if (currentPassword === newPassword) {
-      setPasswordError('새 비밀번호는 현재 비밀번호와 달라야 합니다.')
-      return
-    }
-
-    setPasswordLoading(true)
-    let err = (
-      await supabase.auth.updateUser({
-        password: newPassword,
-        current_password: currentPassword,
-      })
-    ).error
-
-    if (err && /current_password|current password/i.test(err.message ?? '')) {
-      err = (await supabase.auth.updateUser({ password: newPassword })).error
-    }
-    setPasswordLoading(false)
-
-    if (err) {
-      setPasswordError(formatPasswordChangeError(err.message))
-      return
-    }
-
-    setPasswordMessage('비밀번호가 변경되었습니다.')
-    setCurrentPassword('')
-    setNewPassword('')
-    setConfirmPassword('')
-    setShowPasswordForm(false)
   }
 
   const renderStrategyGroup = (label: string, type: TradeType, items: typeof strategies) => {
@@ -207,91 +250,7 @@ export function SettingsPage() {
         <p className="text-sm text-danger" role="alert">{addError}</p>
       )}
 
-      <Card className="flex flex-col gap-5">
-        <h2 className="text-sm font-semibold text-text-sub">계정</h2>
-        <p className="text-sm text-text-sub">{user?.email}</p>
-
-        {!showPasswordForm ? (
-          <Button
-            variant="secondary"
-            className="w-full"
-            onClick={() => {
-              setShowPasswordForm(true)
-              setPasswordError('')
-              setPasswordMessage('')
-            }}
-          >
-            <KeyRound size={16} className="mr-2" />
-            비밀번호 변경
-          </Button>
-        ) : (
-          <form onSubmit={handlePasswordChange} className="flex flex-col gap-4 rounded-xl border border-border bg-bg p-4">
-            <p className="text-xs text-text-dim leading-relaxed">
-              현재 비밀번호를 확인한 뒤 새 비밀번호로 바꿉니다.
-            </p>
-            <Input
-              label="현재 비밀번호"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-            <Input
-              label="새 비밀번호"
-              type="password"
-              placeholder="6자 이상"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              autoComplete="new-password"
-              minLength={6}
-              required
-            />
-            <Input
-              label="새 비밀번호 확인"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              autoComplete="new-password"
-              minLength={6}
-              required
-            />
-            {passwordError && (
-              <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-                {passwordError}
-              </p>
-            )}
-            {passwordMessage && (
-              <p className="rounded-lg bg-success/10 px-3 py-2 text-sm text-success">{passwordMessage}</p>
-            )}
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                className="flex-1"
-                disabled={passwordLoading}
-                onClick={() => {
-                  setShowPasswordForm(false)
-                  setCurrentPassword('')
-                  setNewPassword('')
-                  setConfirmPassword('')
-                  setPasswordError('')
-                }}
-              >
-                취소
-              </Button>
-              <Button type="submit" className="flex-1" disabled={passwordLoading || !!passwordMessage}>
-                {passwordLoading ? '변경 중...' : '변경 저장'}
-              </Button>
-            </div>
-          </form>
-        )}
-
-        <Button variant="danger" onClick={handleLogout} className="w-full">
-          <LogOut size={16} className="mr-2" />
-          로그아웃
-        </Button>
-      </Card>
+      <BackupCard />
     </div>
   )
 }

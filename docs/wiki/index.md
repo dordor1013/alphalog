@@ -7,7 +7,8 @@
 
 ## 주제
 
-- 앱 브랜드: AlphaLog (PWA·HTML title·Auth·사이드바).
-- 백엔드: Supabase — `trade_options` 수량 0 태그 행(003), `strategies`(001), `ipo_records`(004·005).
-- 기능: 매매일지·공모주 노트·대시보드 수익률·설정(비밀번호 변경).
-- 프로덕션: https://alphalog-virid.vercel.app
+- 앱 브랜드: AlphaLog (오프라인 단독 Android 앱, 혼자 사용).
+- 패키징: Capacitor(Android) + GitHub Actions 자동 APK 빌드 → Release `latest` 첨부.
+- 저장: 폰 로컬 `@capacitor/preferences` (`src/lib/localdb.ts`). 로그인·서버 없음.
+- 기능: 매매일지·공모주 노트·대시보드 수익률·설정(매매 기준 옵션·데이터 백업).
+- 참고: 2026-06-15 세션에서 Supabase·로그인·경제지표 제거. 이전 Supabase 마이그레이션은 `supabase/`에 히스토리로만 남음.

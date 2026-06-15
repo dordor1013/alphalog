@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-06-15
+
+- 오프라인 단독 APK 전환: Supabase·로그인·경제지표(FRED) 제거, 데이터는 폰 로컬 저장(`src/lib/localdb.ts`, `@capacitor/preferences`)
+- `useStore` 전면 로컬화(매매·전략·공모주 CRUD), `App` 로그인 게이트 제거 + `HashRouter`, `types`에서 `user_id` 제거
+- 설정: 계정/비밀번호/로그아웃 제거, JSON 데이터 백업(내보내기/복사/가져오기) 추가
+- Capacitor Android 추가(`com.alphalog.app`), 로고로 앱 아이콘·스플래시 생성, 고정 키스토어 서명(덮어쓰기 설치 시 데이터 유지)
+- GitHub Actions `Build Android APK`: push 시 APK 빌드 → Release `latest` 첨부, `versionCode`=run number
+- 정리: supabase-js·vite-plugin-pwa·playwright·`scripts/*`·`vercel.json`·`_redirects` 제거, README 갱신
+- (세션 초반) 홈페이지 안 열림 원인: Supabase 프로젝트 INACTIVE → Management API로 복구, `App` 세션 타임아웃 추가
+
 ## 2026-05-30 (후속)
 
 - 매매 기준 옵션: `strategies` 테이블 마이그레이션(004)·설정 옵션 추가/초기화 수정, NewTrade 설정 바로가기

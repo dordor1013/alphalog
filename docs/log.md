@@ -1,5 +1,16 @@
 # Session log
 
+## [2026-06-15] session | 홈페이지 복구 + 오프라인 단독 APK 전환
+
+- 홈페이지 안 열림: Supabase 프로젝트 INACTIVE 상태 → Management API `restore`로 복구, `App.tsx` getSession 타임아웃 추가
+- 요청에 따라 웹+Supabase 구조를 **오프라인 단독 Android APK**로 전환 (혼자 사용, 로그인·서버 제거)
+- 로컬 저장 계층 `src/lib/localdb.ts`(@capacitor/preferences), `useStore` 전면 로컬화, `App` HashRouter
+- 경제지표·Auth·PasswordRecovery·supabase 파일 삭제, 설정에 데이터 백업(JSON) 추가
+- Capacitor Android 추가, 로고 아이콘 생성, 고정 키스토어 서명, GitHub Actions로 APK 자동 빌드→Release 첨부
+- 정리: supabase-js·PWA·playwright·scripts·vercel.json 제거, README 갱신
+
+상세: `docs/wiki/changelog.md`
+
 ## [2026-05-30] session | 옵션·Auth·수익률·공모주 노트·Vercel 배포
 
 - 설정 매수/매도 옵션: DB `strategies` 생성(004), 타입별 초기화·추가 오류 처리, NewTrade→설정 바로가기

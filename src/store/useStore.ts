@@ -1,17 +1,29 @@
 import { create } from 'zustand'
-import { supabase } from '@/lib/supabase'
 import { ipoFormToRow } from '@/lib/ipo'
-import type { Trade, Strategy, TradeFormData, Market, TradeType, IpoRecord, IpoFormData } from '@/lib/types'
-import type { User } from '@supabase/supabase-js'
+import {
+  COLLECTIONS,
+  genId,
+  getCollection,
+  setCollection,
+} from '@/lib/localdb'
+import type {
+  Trade,
+  TradeOption,
+  Strategy,
+  TradeFormData,
+  Market,
+  TradeType,
+  IpoRecord,
+  IpoFormData,
+} from '@/lib/types'
 
 interface AppState {
-  user: User | null
   trades: Trade[]
   strategies: Strategy[]
   ipoRecords: IpoRecord[]
   loading: boolean
 
-  setUser: (user: User | null) => void
+  loadAll: () => Promise<void>
   fetchTrades: () => Promise<void>
   addTrade: (data: TradeFormData) => Promise<void>
   deleteTrade: (id: string) => Promise<void>
@@ -28,194 +40,180 @@ interface AppState {
   getHoldings: (market?: Market) => { stock_name: string; market: Market; quantity: number; avg_price: number; value: number }[]
 }
 
+function sortTrades(trades: Trade[]): Trade[] {
+  return [...trades].sort((a, b) => {
+    if (a.trade_date !== b.trade_date) return a.trade_date < b.trade_date ? 1 : -1
+    return a.created_at < b.created_at ? 1 : -1
+  })
+}
+
+function sortStrategies(strategies: Strategy[]): Strategy[] {
+  return [...strategies].sort((a, b) => {
+    if (a.type !== b.type) return a.type < b.type ? -1 : 1
+    return a.option_number - b.option_number
+  })
+}
+
+function sortIpoRecords(records: IpoRecord[]): IpoRecord[] {
+  return [...records].sort((a, b) => {
+    const aSub = a.subscription_date ?? ''
+    const bSub = b.subscription_date ?? ''
+    if (aSub !== bSub) return aSub < bSub ? 1 : -1
+    return a.created_at < b.created_at ? 1 : -1
+  })
+}
+
 export const useStore = create<AppState>((set, get) => ({
-  user: null,
   trades: [],
   strategies: [],
   ipoRecords: [],
   loading: false,
 
-  setUser: (user) => set({ user }),
+  loadAll: async () => {
+    set({ loading: true })
+    await Promise.all([get().fetchTrades(), get().fetchStrategies(), get().fetchIpoRecords()])
+    await get().initStrategies()
+    set({ loading: false })
+  },
 
   fetchTrades: async () => {
-    const { user } = get()
-    if (!user) return
-
-    set({ loading: true })
-    const { data: trades } = await supabase
-      .from('trades')
-      .select('*, trade_options(*)')
-      .eq('user_id', user.id)
-      .order('trade_date', { ascending: false })
-
-    set({ trades: trades ?? [], loading: false })
+    const trades = await getCollection<Trade>(COLLECTIONS.trades)
+    set({ trades: sortTrades(trades) })
   },
 
   addTrade: async (formData) => {
-    const { user } = get()
-    if (!user) return
-
-    const { data: trade, error } = await supabase
-      .from('trades')
-      .insert({
-        user_id: user.id,
-        market: formData.market,
-        stock_name: formData.stock_name,
-        trade_type: formData.trade_type,
-        trade_date: formData.trade_date,
-        reason: formData.reason,
-      })
-      .select()
-      .single()
-
-    if (error || !trade) return
-
-    const optionRows = formData.options.map((opt) => ({
-      trade_id: trade.id,
+    const trades = await getCollection<Trade>(COLLECTIONS.trades)
+    const tradeId = genId()
+    const options: TradeOption[] = formData.options.map((opt) => ({
+      id: genId(),
+      trade_id: tradeId,
       option_number: opt.option_number,
       price: opt.price,
       quantity: opt.quantity,
+      amount: Math.round(opt.price * opt.quantity * 100) / 100,
     }))
 
-    await supabase.from('trade_options').insert(optionRows)
+    const trade: Trade = {
+      id: tradeId,
+      market: formData.market,
+      stock_name: formData.stock_name,
+      trade_type: formData.trade_type,
+      trade_date: formData.trade_date,
+      reason: formData.reason,
+      created_at: new Date().toISOString(),
+      trade_options: options,
+    }
+
+    await setCollection(COLLECTIONS.trades, [...trades, trade])
     await get().fetchTrades()
   },
 
   deleteTrade: async (id) => {
-    await supabase.from('trade_options').delete().eq('trade_id', id)
-    await supabase.from('trades').delete().eq('id', id)
+    const trades = await getCollection<Trade>(COLLECTIONS.trades)
+    await setCollection(
+      COLLECTIONS.trades,
+      trades.filter((t) => t.id !== id),
+    )
     await get().fetchTrades()
   },
 
   fetchStrategies: async () => {
-    const { user } = get()
-    if (!user) return
-
-    const { data } = await supabase
-      .from('strategies')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('type')
-      .order('option_number')
-
-    set({ strategies: data ?? [] })
+    const strategies = await getCollection<Strategy>(COLLECTIONS.strategies)
+    set({ strategies: sortStrategies(strategies) })
   },
 
   initStrategies: async () => {
-    const { user } = get()
-    if (!user) return
-
+    const strategies = await getCollection<Strategy>(COLLECTIONS.strategies)
     const types: TradeType[] = ['BUY', 'SELL']
+    const toAdd: Strategy[] = []
 
     for (const type of types) {
-      const { data: existing } = await supabase
-        .from('strategies')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('type', type)
-
-      if (existing && existing.length > 0) continue
-
-      const defaults: Omit<Strategy, 'id'>[] = []
+      const hasType = strategies.some((s) => s.type === type)
+      if (hasType) continue
       for (let n = 1; n <= 3; n++) {
-        defaults.push({
-          user_id: user.id,
+        toAdd.push({
+          id: genId(),
           type,
           option_number: n,
           name: `${type === 'BUY' ? '매수' : '매도'} 옵션 ${n}`,
         })
       }
-
-      const { error } = await supabase.from('strategies').insert(defaults)
-      if (error) console.error('[initStrategies]', type, error.message)
     }
 
-    await get().fetchStrategies()
+    if (toAdd.length > 0) {
+      await setCollection(COLLECTIONS.strategies, [...strategies, ...toAdd])
+      await get().fetchStrategies()
+    }
   },
 
   updateStrategyName: async (id, name) => {
-    await supabase.from('strategies').update({ name }).eq('id', id)
+    const strategies = await getCollection<Strategy>(COLLECTIONS.strategies)
+    await setCollection(
+      COLLECTIONS.strategies,
+      strategies.map((s) => (s.id === id ? { ...s, name } : s)),
+    )
     await get().fetchStrategies()
   },
 
   addStrategy: async (type) => {
-    const { user } = get()
-    if (!user) return false
+    const strategies = await getCollection<Strategy>(COLLECTIONS.strategies)
+    const sameType = strategies.filter((s) => s.type === type)
+    const nextNumber = sameType.length > 0 ? Math.max(...sameType.map((s) => s.option_number)) + 1 : 1
 
-    await get().fetchStrategies()
-    const sameType = get().strategies.filter((s) => s.type === type)
-    const nextNumber = sameType.length > 0
-      ? Math.max(...sameType.map((s) => s.option_number)) + 1
-      : 1
-
-    const { error } = await supabase.from('strategies').insert({
-      user_id: user.id,
+    const newStrategy: Strategy = {
+      id: genId(),
       type,
       option_number: nextNumber,
       name: `${type === 'BUY' ? '매수' : '매도'} 옵션 ${nextNumber}`,
-    })
-
-    if (error) {
-      console.error('[addStrategy]', error.message, error.code)
-      return false
     }
 
+    await setCollection(COLLECTIONS.strategies, [...strategies, newStrategy])
     await get().fetchStrategies()
     return true
   },
 
   deleteStrategy: async (id) => {
-    await supabase.from('strategies').delete().eq('id', id)
+    const strategies = await getCollection<Strategy>(COLLECTIONS.strategies)
+    await setCollection(
+      COLLECTIONS.strategies,
+      strategies.filter((s) => s.id !== id),
+    )
     await get().fetchStrategies()
   },
 
   fetchIpoRecords: async () => {
-    const { user } = get()
-    if (!user) return
-
-    const { data } = await supabase
-      .from('ipo_records')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('subscription_date', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
-
-    set({ ipoRecords: data ?? [] })
+    const records = await getCollection<IpoRecord>(COLLECTIONS.ipoRecords)
+    set({ ipoRecords: sortIpoRecords(records) })
   },
 
   addIpoRecord: async (formData) => {
-    const { user } = get()
-    if (!user) return false
-
-    const { error } = await supabase.from('ipo_records').insert({
-      user_id: user.id,
+    const records = await getCollection<IpoRecord>(COLLECTIONS.ipoRecords)
+    const record: IpoRecord = {
+      id: genId(),
+      created_at: new Date().toISOString(),
       ...ipoFormToRow(formData),
-    })
-
-    if (error) {
-      console.error('[addIpoRecord]', error.message)
-      return false
     }
+    await setCollection(COLLECTIONS.ipoRecords, [...records, record])
     await get().fetchIpoRecords()
     return true
   },
 
   updateIpoRecord: async (id, formData) => {
-    const { error } = await supabase
-      .from('ipo_records')
-      .update(ipoFormToRow(formData))
-      .eq('id', id)
-
-    if (error) {
-      console.error('[updateIpoRecord]', error.message)
-      return false
-    }
+    const records = await getCollection<IpoRecord>(COLLECTIONS.ipoRecords)
+    await setCollection(
+      COLLECTIONS.ipoRecords,
+      records.map((r) => (r.id === id ? { ...r, ...ipoFormToRow(formData) } : r)),
+    )
     await get().fetchIpoRecords()
     return true
   },
 
   deleteIpoRecord: async (id) => {
-    await supabase.from('ipo_records').delete().eq('id', id)
+    const records = await getCollection<IpoRecord>(COLLECTIONS.ipoRecords)
+    await setCollection(
+      COLLECTIONS.ipoRecords,
+      records.filter((r) => r.id !== id),
+    )
     await get().fetchIpoRecords()
   },
 

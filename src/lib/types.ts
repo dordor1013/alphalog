@@ -3,7 +3,6 @@ export type TradeType = 'BUY' | 'SELL'
 
 export interface Strategy {
   id: string
-  user_id: string
   type: TradeType
   option_number: number
   name: string
@@ -20,7 +19,6 @@ export interface TradeOption {
 
 export interface Trade {
   id: string
-  user_id: string
   market: Market
   stock_name: string
   trade_type: TradeType
@@ -56,7 +54,6 @@ export type IpoAllotmentStatus = 'PENDING' | 'WON' | 'LOST'
 
 export interface IpoRecord {
   id: string
-  user_id: string
   stock_name: string
   underwriter: string
   subscription_date: string | null

@@ -1,77 +1,57 @@
 # AlphaLog
 
-주식 매매일지 PWA 웹앱 (**AlphaLog**). 국내·미국 주식 매매 기록과 포트폴리오를 관리합니다.
+국내·미국 주식 **매매일지 & 공모주 기록** 앱. 혼자 쓰는 **오프라인 단독 Android 앱(APK)** 으로, 모든 데이터는 폰 안에만 저장됩니다. 로그인·서버·인터넷 연결이 필요 없습니다.
 
-## 설정
+## 기능
 
-### 1. Supabase 프로젝트 생성
+- 매매 기록(국내/미국, 매수/매도, 다중 매매 기준)과 보유 종목·평가금액
+- 대시보드: 일·주·월·년 누적 실현 수익률, 종목별 비중
+- 공모주 노트: 청약/상장일, 당첨·미당첨·대기, 당첨 시 배정가·매도·수익률
+- 설정: 매매 기준 옵션 편집, 데이터 백업(내보내기/가져오기)
 
-1. [supabase.com](https://supabase.com)에서 무료 프로젝트를 생성합니다.
-2. **SQL Editor**에서 아래 순서대로 마이그레이션 파일을 실행합니다 (`supabase/migrations/`).
-   - `001_initial_schema.sql` — 초기 스키마
-   - `002_unlimited_options.sql` — 옵션 번호 제한 완화
-   - `003_trade_options_tag_rows.sql` — 복수 기준 선택 시 `quantity >= 0` (태그 행)
-3. **Project Settings → API**에서 URL과 anon key를 복사합니다.
+## 데이터 저장
 
-신규 DB가 아니라면 이미 적용된 스크립트는 건너뛰고, **아직 없는 변경만** 실행하면 됩니다. `003`이 없으면 여러 매매 기준 선택 시 저장이 거절될 수 있습니다.
+- 데이터는 **Capacitor Preferences**(폰 로컬 저장소)에만 저장됩니다.
+- 클라우드가 없으므로 **설정 → 데이터 백업**에서 주기적으로 JSON으로 내보내 두세요.
+- 같은 키로 서명된 APK를 **덮어쓰기 설치**하면 데이터가 유지됩니다 (아래 빌드 참고).
 
-### 2. 환경변수 설정
-
-```bash
-cp .env.example .env
-```
-
-`.env` 파일에 Supabase URL과 anon key를 입력합니다.
-
-### 3. 외부 API 키 (선택)
-
-- **FRED API**: [fred.stlouisfed.org](https://fred.stlouisfed.org)에서 무료 API 키 발급 (경제지표)
-
-### 4. 실행
+## 개발 (웹 미리보기)
 
 ```bash
 npm install
 npm run dev
 ```
 
-개발 서버는 기본적으로 **LAN(같은 Wi‑Fi)에서 접속 가능**하도록 설정되어 있습니다. 터미널에 `Network: http://192.168.x.x:5173/` 주소가 표시되면, **PC와 핸드폰이 같은 Wi‑Fi**에 연결한 뒤 핸드폰 브라우저에서 그 주소로 접속하세요.
+`http://localhost:5173` 에서 브라우저로 확인할 수 있습니다 (웹에서는 Preferences가 localStorage로 동작).
 
-`localhost`와 `127.0.0.1`은 **폰에서 접속할 수 없습니다** (내 PC 안쪽 주소이기 때문입니다).
+## APK 만들기 (GitHub Actions, 무료)
 
-이메일 인증 등 Supabase Auth 리다이렉트를 쓰는 경우, Supabase 대시보드 **Authentication → URL Configuration**에 `http://192.168.x.x:5173` 형태의 주소를 **Redirect URLs**에 추가해야 할 수 있습니다.
+로컬에 Android Studio/JDK를 설치할 필요 없이 GitHub Actions가 APK를 빌드합니다.
 
-### 5. 다른 사람에게 공개해서 쓰게 하기 (배포)
+1. **저장소 설정 → Actions → General → Workflow permissions** 에서 **Read and write permissions** 를 켭니다. (서명 키스토어를 처음 한 번 자동 커밋하기 위해 필요)
+2. `main` 브랜치에 코드를 push 합니다.
+3. **Actions** 탭에서 `Build Android APK` 워크플로가 끝나면, 저장소 **Releases → latest** 의 `AlphaLog.apk` 를 폰에서 내려받아 설치합니다.
+4. 처음 설치 시 "출처를 알 수 없는 앱" 설치를 허용해야 할 수 있습니다.
 
-- **처음 배포한다면**: 아래 초보자용 가이드를 **위에서부터 순서대로** 따라 하면 됩니다.  
-  → [배포하기-초보자용](./docs/guides/배포하기-초보자용.md)
+### 기능 업데이트
 
-아래는 요약입니다.
+코드를 고쳐 `git push` 하면 몇 분 뒤 Release의 `AlphaLog.apk` 가 갱신됩니다. 폰에서 다시 받아 **기존 앱 위에 덮어쓰기 설치**하면 데이터가 그대로 유지됩니다.
 
-앱과 DB 설계상 **계정별로 데이터가 분리**되어 있습니다(RLS). **하나의 Supabase 프로젝트**만 두고, 웹 프론트만 공개 호스팅하면 여러 사용자가 같은 주소에서 가입·로그인해 쓸 수 있습니다.
+### 서명에 대해
 
-1. **GitHub 등에 저장소 올리기** (민감 정보는 올리지 않기: `.env`, API 키).
-2. **정적 호스팅 연결** (예: [Vercel](https://vercel.com/), [Netlify](https://www.netlify.com/), Cloudflare Pages).  
-   이 저장소는 `public/_redirects`(Netlify)와 `vercel.json`(Vercel)으로 SPA 새로고침 시에도 라우팅이 동작하도록 맞춰 두었습니다.
-3. 빌드 설정 예시  
-   - **Build command**: `npm run build`  
-   - **Output directory**: `dist`
-4. 호스팅 대시보드에 **환경 변수** 추가 (프로덕션):  
-   - `VITE_SUPABASE_URL`  
-   - `VITE_SUPABASE_ANON_KEY`  
-   - (선택) `VITE_FRED_API_KEY` — 없으면 경제지표만 비어 있거나 오류 처리됩니다.
-5. **Supabase** 대시보드 → **Authentication → URL Configuration**
-   - **Site URL**: 배포 도메인 (예: `https://your-app.vercel.app`)
-   - **Redirect URLs**에 같은 도메인과 와일드카드 허용이 필요하면 `https://your-app.vercel.app/**` 추가  
-   로컬 개발도 쓸 거면 기존처럼 `http://localhost:5173` 등도 함께 넣어 둡니다.
-6. 배포 후 **공개 URL**을 알려 주면 사용자는 그 주소로 접속해 회원가입·로그인하면 됩니다.
+- 첫 빌드 때 워크플로가 `android/app/alphalog-release.keystore` 를 생성해 저장소에 커밋합니다.
+- 이후 모든 빌드가 같은 키로 서명되어 덮어쓰기 설치가 가능합니다. (개인용이라 키스토어를 저장소에 두는 방식)
 
-**참고**: 완전 오픈 SaaS처럼 “누구나 가입”을 막고 싶다면 Supabase Auth 설정(예: 이메일 도메인 제한·수동 초대 등)은 별도 정책이 필요합니다. 기본은 이메일/비번 공개 회원가입에 가깝습니다.
+### 로컬 빌드 (선택, Android Studio 필요)
+
+```bash
+npm run cap:sync      # 웹 빌드 + Capacitor 동기화
+npm run android:open  # Android Studio로 열기
+```
 
 ## 기술 스택
 
 - React + Vite + TypeScript
 - Tailwind CSS v4
-- Supabase (Auth + PostgreSQL)
-- Recharts (파이차트)
-- Zustand (상태관리)
-- PWA (오프라인 지원)
+- Capacitor (Android 패키징 + Preferences 로컬 저장)
+- Recharts (차트) · Zustand (상태관리)
