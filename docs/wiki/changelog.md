@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-06-15 (정리)
+
+- 웹·Supabase 잔여물 삭제: `supabase/` 마이그레이션, `docs/guides/`(Vercel·Supabase 가이드), 핸드오프 문서, `public/icons.svg`·`favicon.svg`
+- `index.html` PWA/Apple 메타 태그 제거, wiki·log APK 기준으로 갱신
+
 ## 2026-06-15
 
 - 오프라인 단독 APK 전환: Supabase·로그인·경제지표(FRED) 제거, 데이터는 폰 로컬 저장(`src/lib/localdb.ts`, `@capacitor/preferences`)

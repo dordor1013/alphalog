@@ -7,7 +7,6 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
     "cap:sync": "npm run build && cap sync android",
     "android:open": "cap open android"
   },

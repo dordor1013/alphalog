@@ -1,14 +1,19 @@
 # AlphaLog — Wiki index
 
 - [Changelog](changelog.md) — 날짜별 요약
-- [배포하기 (초보자 단계별)](../guides/배포하기-초보자용.md)
-- 최근 핸드오프: [진행중](../handoff.md) · [2026-05-30](../handoff-2026-05-30.md)
-- [Supabase 연결·가입 오류 복구](../guides/supabase-연결-복구.md)
+- [Session log](../log.md) — 세션 기록
 
-## 주제
+## 앱 개요
 
-- 앱 브랜드: AlphaLog (오프라인 단독 Android 앱, 혼자 사용).
-- 패키징: Capacitor(Android) + GitHub Actions 자동 APK 빌드 → Release `latest` 첨부.
-- 저장: 폰 로컬 `@capacitor/preferences` (`src/lib/localdb.ts`). 로그인·서버 없음.
-- 기능: 매매일지·공모주 노트·대시보드 수익률·설정(매매 기준 옵션·데이터 백업).
-- 참고: 2026-06-15 세션에서 Supabase·로그인·경제지표 제거. 이전 Supabase 마이그레이션은 `supabase/`에 히스토리로만 남음.
+- **AlphaLog** — 오프라인 단독 Android 앱 (혼자 사용)
+- **패키징**: Capacitor + GitHub Actions → [Releases](https://github.com/dordor1013/alphalog/releases/tag/latest) 에 APK
+- **저장**: 폰 로컬 `@capacitor/preferences` (`src/lib/localdb.ts`)
+- **기능**: 매매일지 · 공모주 노트 · 대시보드 수익률 · 설정(매매 기준 · 데이터 백업)
+
+## APK 받기 / 업데이트
+
+1. GitHub **Releases → latest** 에서 `AlphaLog.apk` 다운로드
+2. 폰에 설치 (덮어쓰기 설치 시 데이터 유지)
+3. 코드 수정 후 `main` push → Actions가 새 APK 빌드
+
+자세한 사용법은 [README](../../README.md) 참고.
